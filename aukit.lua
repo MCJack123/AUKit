@@ -7,7 +7,7 @@
 -- and playing audio files in various formats. It includes support for loading
 -- audio from many sources, including PCM, DFPWM, and IMA ADPCM codecs, as well
 -- as WAV, AIFF, AU, and FLAC files. It can also generate audio on-the-fly as
--- tones, noise, or silence
+-- tones, noise, or silence.
 --
 -- AUKit uses a structure called Audio to store information about each audio
 -- chunk. An audio object holds the sample rate of the audio, as well as the
