@@ -1491,7 +1491,7 @@ end
 function aukit.effects.amplify(audio, multiplier)
     expectAudio(1, audio)
     expect(2, multiplier, "number")
-    if multiplier == 1 then return end
+    if multiplier == 1 then return audio end
     local start = os.epoch "utc"
     for c = 1, #audio.data do
         local ch = audio.data[c]
@@ -1511,7 +1511,7 @@ end
 function aukit.effects.speed(audio, multiplier)
     expectAudio(1, audio)
     expect(2, multiplier, "number")
-    if multiplier == 1 then return end
+    if multiplier == 1 then return audio end
     local rate = audio.sampleRate
     audio.sampleRate = audio.sampleRate * multiplier
     local new = audio:resample(rate)
@@ -1532,7 +1532,7 @@ function aukit.effects.fade(audio, startTime, startAmplitude, endTime, endAmplit
     expect(3, startAmplitude, "number")
     expect(4, endTime, "number")
     expect(5, endAmplitude, "number")
-    if startAmplitude == 1 and endAmplitude == 1 then return end
+    if startAmplitude == 1 and endAmplitude == 1 then return audio end
     local startt = os.epoch "utc"
     for c = 1, #audio.data do
         local ch = audio.data[c]
