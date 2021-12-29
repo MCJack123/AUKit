@@ -33,6 +33,14 @@
 -- returning the audio for streamlining). The effects are intended to speed up
 -- common operations on audio. More effects may be added in future versions.
 --
+-- Be aware that processing large amounts of audio (especially loading FLAC or
+-- resampling with higher quality) is *very* slow. It's recommended to use audio
+-- files with lower data size (8-bit mono PCM/WAV/AIFF is ideal), and potentially
+-- a lower sample rate, to reduce the load on the system - especially as all
+-- data gets converted to 8-bit DFPWM data on playback anyway. The code yields
+-- internally when things take a long time to avoid abort timeouts, but events
+-- are recycled to keep them for other code.
+--
 -- For an example of how to use AUKit, see the accompanying auplay.lua file.
 
 -- MIT License
@@ -66,6 +74,8 @@ local aukit = {effects = {}}
 local Audio = {}
 local Audio_mt
 
+aukit.defaultInterpolation = "linear"
+
 local ima_index_table = {
     [0] = -1, -1, -1, -1, 2, 4, 6, 8,
     -1, -1, -1, -1, 2, 4, 6, 8
@@ -96,6 +106,15 @@ local function intunpack(str, pos, sz, signed, be)
     else for i = 0, sz - 1 do n = n + str:byte(pos+i) * 2^(8*i) end end
     if signed and n >= 2^(sz*8-1) then n = n - 2^(sz*8) end
     return n, pos + sz
+end
+
+local function nosleep()
+    local id = tostring{}
+    os.queueEvent("nosleep", id)
+    repeat
+        local ev = table.pack(os.pullEvent())
+        if ev[1] ~= "nosleep" then os.queueEvent(table.unpack(ev, 1, ev.n)) end
+    until ev[1] == "nosleep" and ev[2] == id
 end
 
 local interpolate = {
@@ -432,19 +451,21 @@ end
 --- Creates a new audio object with the data resampled to a different sample rate.
 -- If the target rate is the same, the object is copied without modification.
 -- @tparam number sampleRate The new sample rate in Hertz
--- @tparam[opt="cubic"] "none"|"linear"|"cubic" interpolation The interpolation mode to use
+-- @tparam[opt=aukit.defaultInterpolation] "none"|"linear"|"cubic" interpolation The interpolation mode to use
 -- @treturn Audio A new audio object with the resampled data
 function Audio:resample(sampleRate, interpolation)
     expect(1, sampleRate, "number")
-    interpolation = expect(2, interpolation, "string", "nil") or "cubic"
+    interpolation = expect(2, interpolation, "string", "nil") or aukit.defaultInterpolation
     if interpolation ~= "none" and interpolation ~= "linear" and interpolation ~= "cubic" then error("bad argument #2 (invalid interpolation type)", 2) end
     local new = setmetatable({sampleRate = sampleRate, data = {}}, Audio_mt)
     local ratio = sampleRate / self.sampleRate
     local newlen = #self.data[1] * ratio
     local interp = interpolate[interpolation]
+    local start = os.epoch "utc"
     for y, c in ipairs(self.data) do
         local line = {}
         for i = 1, newlen do
+            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" nosleep() end
             local x = (i - 1) / ratio + 1
             if x % 1 == 0 then line[i] = c[x]
             else line[i] = clamp(interp(c, x), -1, 1) end
@@ -459,7 +480,9 @@ end
 function Audio:mono()
     local new = setmetatable({sampleRate = self.ampleRate, data = {{}}}, Audio_mt)
     local cn = #self.data
+    local start = os.epoch "utc"
     for i = 1, #self.data[1] do
+        if os.epoch "utc" - start > 5000 then start = os.epoch "utc" nosleep() end
         local s = 0
         for c = 1, cn do s = s + self.data[c][i] end
         new.data[1][i] = s / cn
@@ -758,28 +781,106 @@ function aukit.pcm(data, bitDepth, dataType, channels, sampleRate, interleaved, 
     local byteDepth = bitDepth / 8
     if (#data / (type(data) == "table" and 1 or byteDepth)) % channels ~= 0 then error("bad argument #1 (uneven amount of data per channel)", 2) end
     local len = (#data / (type(data) == "table" and 1 or byteDepth)) / channels
-    local format = (bigEndian and ">" or "<") .. (dataType == "float" and "f" or ((dataType == "signed" and "i" or "I") .. byteDepth))
+    local csize = jit and 7680 or 32768
+    local format = (bigEndian and ">" or "<") .. (dataType == "float" and "f" or ((dataType == "signed" and "i" or "I") .. byteDepth)):rep(csize)
     local maxValue = 2^(bitDepth-1)
     local obj = setmetatable({sampleRate = sampleRate, data = {}}, Audio_mt)
     for i = 1, channels do obj.data[i] = {} end
-    local pos = 1
-    local function read()
-        local s
-        if type(data) == "table" then s, pos = data[pos], pos + 1
-        elseif dataType == "float" then s, pos = format:unpack(data, pos)
-        else s, pos = intunpack(data, pos, byteDepth, dataType == "signed", bigEndian) end
-        if dataType == "signed" then s = s / (s < 0 and maxValue or maxValue-1)
-        elseif dataType == "unsigned" then s = (s - 128) / (s < 128 and -maxValue or maxValue-1) end
-        expect.range(s, -1, 1)
-        return s
+    local pos, spos = 1, 1
+    local tmp = {}
+    local read
+    if type(data) == "table" then
+        if dataType == "signed" then
+            function read()
+                local s = data[pos]
+                pos = pos + 1
+                return s / (s < 0 and maxValue or maxValue-1)
+            end
+        elseif dataType == "unsigned" then
+            function read()
+                local s = data[pos]
+                pos = pos + 1
+                return (s - 128) / (s < 128 and maxValue or maxValue-1)
+            end
+        else
+            function read()
+                local s = data[pos]
+                pos = pos + 1
+                return s
+            end
+        end
+    elseif dataType == "float" then
+        function read()
+            if pos > #tmp then
+                if spos + (csize * byteDepth) > #data then
+                    local f = (bigEndian and ">" or "<") .. ("f"):rep((#data - spos + 1) / byteDepth)
+                    tmp = {f:unpack(data, spos)}
+                    spos = tmp[#tmp]
+                    tmp[#tmp] = nil
+                else
+                    tmp = {format:unpack(data, spos)}
+                    spos = tmp[#tmp]
+                    tmp[#tmp] = nil
+                end
+                pos = 1
+            end
+            local s = tmp[pos]
+            pos = pos + 1
+            return s
+        end
+    elseif dataType == "signed" then
+        function read()
+            if pos > #tmp then
+                if spos + (csize * byteDepth) > #data then
+                    local f = (bigEndian and ">" or "<") .. ("i" .. byteDepth):rep((#data - spos + 1) / byteDepth)
+                    tmp = {f:unpack(data, spos)}
+                    spos = tmp[#tmp]
+                    tmp[#tmp] = nil
+                else
+                    tmp = {format:unpack(data, spos)}
+                    spos = tmp[#tmp]
+                    tmp[#tmp] = nil
+                end
+                pos = 1
+            end
+            local s = tmp[pos]
+            pos = pos + 1
+            return s / (s < 0 and maxValue or maxValue-1)
+        end
+    else -- unsigned
+        function read()
+            if pos > #tmp then
+                if spos + (csize * byteDepth) > #data then
+                    local f = (bigEndian and ">" or "<") .. ("I" .. byteDepth):rep((#data - spos + 1) / byteDepth)
+                    tmp = {f:unpack(data, spos)}
+                    spos = tmp[#tmp]
+                    tmp[#tmp] = nil
+                else
+                    tmp = {format:unpack(data, spos)}
+                    spos = tmp[#tmp]
+                    tmp[#tmp] = nil
+                end
+                pos = 1
+            end
+            local s = tmp[pos]
+            pos = pos + 1
+            return (s - 128) / (s < 128 and maxValue or maxValue-1)
+        end
     end
-    if interleaved then
+    local start = os.epoch "utc"
+    if interleaved and channels > 1 then
         local d = obj.data
-        for i = 1, len do for j = 1, channels do d[j][i] = read() end end
+        for i = 1, len do
+            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" nosleep() end
+            for j = 1, channels do d[j][i] = read() end
+        end
     else for j = 1, channels do
         local line = {}
-        for i = 1, len do line[i] = read() end
         obj.data[j] = line
+        for i = 1, len do
+            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" nosleep() end
+            line[i] = read()
+        end
     end end
     return obj
 end
@@ -853,20 +954,25 @@ function aukit.adpcm(data, channels, sampleRate, topFirst, interleaved, predicto
     end
     local obj = setmetatable({sampleRate = sampleRate, data = {}}, Audio_mt)
     local step = {}
+    local start = os.epoch "utc"
     if interleaved then
         local d = obj.data
-        for i = 1, len do for j = 1, channels do
-            local nibble = read()
-            step_index[j] = clamp(step_index[j] + ima_index_table[nibble], 0, 88)
-            local diff = ((nibble >= 8 and nibble - 16 or nibble) + 0.5) * step[j] / 4
-            predictor[j] = clamp(predictor[j] + diff, -32768, 32767)
-            step[j] = ima_step_table[step_index]
-            d[j][i] = predictor[j] / (predictor[j] < 0 and 32768 or 32767)
-        end end
+        for i = 1, len do
+            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" nosleep() end
+            for j = 1, channels do
+                local nibble = read()
+                step_index[j] = clamp(step_index[j] + ima_index_table[nibble], 0, 88)
+                local diff = ((nibble >= 8 and nibble - 16 or nibble) + 0.5) * step[j] / 4
+                predictor[j] = clamp(predictor[j] + diff, -32768, 32767)
+                step[j] = ima_step_table[step_index]
+                d[j][i] = predictor[j] / (predictor[j] < 0 and 32768 or 32767)
+            end
+        end
     else for j = 1, channels do
         local line = {}
         local predictor, step_index, step = predictor[j], step_index[j], nil
         for i = 1, len do
+            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" nosleep() end
             local nibble = read()
             step_index = clamp(step_index + ima_index_table[nibble], 0, 88)
             local diff = ((nibble >= 8 and nibble - 16 or nibble) + 0.5) * step / 4
@@ -1092,9 +1198,14 @@ end
 function aukit.effects.amplify(audio, multiplier)
     expectAudio(1, audio)
     expect(2, multiplier, "number")
+    if multiplier == 1 then return end
+    local start = os.epoch "utc"
     for c = 1, #audio.data do
         local ch = audio.data[c]
-        for i = 1, #ch do ch[i] = clamp(ch[i] * multiplier, -1, 1) end
+        for i = 1, #ch do
+            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" nosleep() end
+            ch[i] = clamp(ch[i] * multiplier, -1, 1)
+        end
     end
     return audio
 end
@@ -1107,6 +1218,7 @@ end
 function aukit.effects.speed(audio, multiplier)
     expectAudio(1, audio)
     expect(2, multiplier, "number")
+    if multiplier == 1 then return end
     local rate = audio.sampleRate
     audio.sampleRate = audio.sampleRate * multiplier
     local new = audio:resample(rate)
@@ -1127,11 +1239,16 @@ function aukit.effects.fade(audio, startTime, startAmplitude, endTime, endAmplit
     expect(3, startAmplitude, "number")
     expect(4, endTime, "number")
     expect(5, endAmplitude, "number")
+    if startAmplitude == 1 and endAmplitude == 1 then return end
+    local startt = os.epoch "utc"
     for c = 1, #audio.data do
         local ch = audio.data[c]
         local start = startTime * audio.sampleRate
         local m = (endAmplitude - startAmplitude) / ((endTime - startTime) * audio.sampleRate)
-        for i = start, endTime * audio.sampleRate do ch[i] = clamp(ch[i] * (m * (i - start) + startAmplitude), -1, 1) end
+        for i = start, endTime * audio.sampleRate do
+            if os.epoch "utc" - startt > 5000 then startt = os.epoch "utc" nosleep() end
+            ch[i] = clamp(ch[i] * (m * (i - start) + startAmplitude), -1, 1)
+        end
     end
     return audio
 end
@@ -1158,10 +1275,12 @@ function aukit.effects.normalize(audio, peakAmplitude, independent)
     peakAmplitude = expect(2, peakAmplitude, "number", "nil") or 1
     expect(3, independent, "boolean", "nil")
     local mult
+    local start, sampleRate = os.epoch "utc", audio.sampleRate
     if not independent then
         local max = 0
         for c = 1, #audio.data do
             local ch = audio.data[c]
+            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" nosleep() end
             for i = 1, #ch do max = math.max(max, math.abs(ch[i])) end
         end
         mult = peakAmplitude / max
@@ -1173,7 +1292,10 @@ function aukit.effects.normalize(audio, peakAmplitude, independent)
             for i = 1, #ch do max = math.max(max, math.abs(ch[i])) end
             mult = peakAmplitude / max
         end
-        for i = 1, #ch do ch[i] = clamp(ch[i] * mult, -1, 1) end
+        if os.epoch "utc" - start > 5000 then start = os.epoch "utc" nosleep() end
+        for i = 1, #ch do
+            ch[i] = clamp(ch[i] * mult, -1, 1)
+        end
     end
     return audio
 end
