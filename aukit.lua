@@ -76,11 +76,12 @@ local dfpwm = require "cc.audio.dfpwm"
 local aukit = {}
 aukit.effects, aukit.stream = {}, {}
 
+--- @tfield "none"|"linear"|"cubic" defaultInterpolation Default interpolation mode for @{Audio:resample} and other functions that need to resample.
+aukit.defaultInterpolation = "linear"
+
 --- @type Audio
 local Audio = {}
 local Audio_mt
-
-aukit.defaultInterpolation = "linear"
 
 local ima_index_table = {
     [0] = -1, -1, -1, -1, 2, 4, 6, 8,
