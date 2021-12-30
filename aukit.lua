@@ -68,7 +68,7 @@
 local expect = require "cc.expect"
 local dfpwm = require "cc.audio.dfpwm"
 
-local aukit = {effects = {}, stream = {}}
+local aukit = {effects = {}, stream = {}, iterate = {}}
 
 --- @class Audio
 local Audio = {}
@@ -147,165 +147,6 @@ local wavegen = {
         return amplitude * math.fmod(2.0 * x * freq + 1.0, 2.0) - amplitude
     end
 }
-
-local function streamer(callback, ...)
-    local speakers = {...}
-    local chunks = {}
-    local complete = false
-    parallel.waitForAll(function()
-        local pending = {}
-        while true do
-            local chunk = callback()
-            if not chunk then complete = true break end
-            chunks[#chunks+1] = chunk
-            sleep(0)
-        end
-    end, function()
-        while not complete or #chunks > 0 do
-            while not chunks[1] do sleep(0) end
-            local chunk = table.remove(chunks, 1)
-            local fn = {}
-            for i, v in ipairs(speakers) do fn[i] = function()
-                local name = peripheral.getName(v)
-                if config and not config.get("standardsMode") then
-                    v.playAudio(chunk[i] or chunk[1], 3)
-                    repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
-                else while not v.playAudio(chunk[i] or chunk[1]) do
-                    repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
-                end end
-            end end
-            parallel.waitForAll(table.unpack(fn))
-        end
-    end)
-end
-
-local function streamPCM(data, bitDepth, dataType, channels, sampleRate, bigEndian, mono)
-    local byteDepth = bitDepth / 8
-    local len = (#data / (type(data) == "table" and 1 or byteDepth)) / channels
-    local csize = jit and 7680 or 32768
-    local format = (bigEndian and ">" or "<") .. (dataType == "float" and "f" or ((dataType == "signed" and "i" or "I") .. byteDepth)):rep(csize)
-    local maxValue = 2^(bitDepth-1)
-    local pos, spos = 1, 1
-    local tmp = {}
-    local read
-    if type(data) == "table" then
-        if dataType == "signed" then
-            function read()
-                local s = data[pos]
-                pos = pos + 1
-                return s / (s < 0 and maxValue or maxValue-1)
-            end
-        elseif dataType == "unsigned" then
-            function read()
-                local s = data[pos]
-                pos = pos + 1
-                return (s - 128) / (s < 128 and maxValue or maxValue-1)
-            end
-        else
-            function read()
-                local s = data[pos]
-                pos = pos + 1
-                return s
-            end
-        end
-    elseif dataType == "float" then
-        function read()
-            if pos > #tmp then
-                if spos + (csize * byteDepth) > #data then
-                    local f = (bigEndian and ">" or "<") .. ("f"):rep((#data - spos + 1) / byteDepth)
-                    tmp = {f:unpack(data, spos)}
-                    spos = tmp[#tmp]
-                    tmp[#tmp] = nil
-                else
-                    tmp = {format:unpack(data, spos)}
-                    spos = tmp[#tmp]
-                    tmp[#tmp] = nil
-                end
-                pos = 1
-            end
-            local s = tmp[pos]
-            pos = pos + 1
-            return s
-        end
-    elseif dataType == "signed" then
-        function read()
-            if pos > #tmp then
-                if spos + (csize * byteDepth) > #data then
-                    local f = (bigEndian and ">" or "<") .. ("i" .. byteDepth):rep((#data - spos + 1) / byteDepth)
-                    tmp = {f:unpack(data, spos)}
-                    spos = tmp[#tmp]
-                    tmp[#tmp] = nil
-                else
-                    tmp = {format:unpack(data, spos)}
-                    spos = tmp[#tmp]
-                    tmp[#tmp] = nil
-                end
-                pos = 1
-            end
-            local s = tmp[pos]
-            pos = pos + 1
-            return s / (s < 0 and maxValue or maxValue-1)
-        end
-    else -- unsigned
-        function read()
-            if pos > #tmp then
-                if spos + (csize * byteDepth) > #data then
-                    local f = (bigEndian and ">" or "<") .. ("I" .. byteDepth):rep((#data - spos + 1) / byteDepth)
-                    tmp = {f:unpack(data, spos)}
-                    spos = tmp[#tmp]
-                    tmp[#tmp] = nil
-                else
-                    tmp = {format:unpack(data, spos)}
-                    spos = tmp[#tmp]
-                    tmp[#tmp] = nil
-                end
-                pos = 1
-            end
-            local s = tmp[pos]
-            pos = pos + 1
-            return (s - 128) / (s < 128 and maxValue or maxValue-1)
-        end
-    end
-    local d = {}
-    local ratio = 48000 / sampleRate
-    local interp = interpolate[aukit.defaultInterpolation]
-    for j = 1, (mono and 1 or channels) do d[j] = setmetatable({}, {__index = function(self, i)
-        if mono then for _ = 1, channels do self[i] = (rawget(self, i) or 0) + read() end self[i] = self[i] / channels
-        else self[i] = read() end
-        return rawget(self, i)
-    end}) end
-    local n = 0
-    local ok = true
-    return function()
-        if not ok then return nil end
-        for i = (n == 0 and interpolation_start[aukit.defaultInterpolation] or 1), interpolation_end[aukit.defaultInterpolation] do
-            if mono then
-                local s = 0
-                for j = 1, channels do
-                    local c = read()
-                    if not c then return nil end
-                    s = s + c
-                end
-                d[1][i] = s / channels
-            else for j = 1, channels do d[j][i] = read() if not d[j][i] then return nil end end end
-        end
-        local chunk = {}
-        for j = 1, #d do chunk[j] = {} end
-        ok = pcall(function()
-            for i = 1, 48000 do
-                for y = 1, #d do
-                    local x = ((n * 48000 + i - 1) / ratio) + 1
-                    if x % 1 == 0 then chunk[y][i] = d[y][x]
-                    else chunk[y][i] = interp(d[y], x) end
-                    chunk[y][i] = clamp(chunk[y][i] * (chunk[y][i] < 0 and 128 or 127), -128, 127)
-                end
-            end
-        end)
-        if #chunk[1] == 0 then return nil end
-        n = n + 1
-        return chunk
-    end
-end
 
 local decodeFLAC do
 
@@ -598,7 +439,7 @@ local decodeFLAC do
 
         for i = 1, numChannels do out[i] = {} end
 
-        if callback then callback(sampleRate) end
+        if callback then callback(sampleRate, numSamples) end
 
         -- Decode FLAC audio frames and write raw samples
         inp = BitInputStream(inp, pos)
@@ -1357,12 +1198,199 @@ function aukit.pack(data, bitDepth, dataType, bigEndian)
     return retval
 end
 
---- Streams a WAV file directly to one or more speakers. Audio will automatically
--- be resampled to 48 kHz. If only one speaker is passed, the audio will also be
--- mixed down to mono.
+--- Plays back stream functions created by one of the `aukit.stream` functions.
+-- @tparam function callback The iterator function that returns each chunk
+-- @tparam speaker ... The speakers to play on
+function aukit.play(callback, ...)
+    local speakers = {...}
+    local chunks = {}
+    local complete = false
+    parallel.waitForAll(function()
+        for chunk in callback do chunks[#chunks+1] = chunk sleep(0) end
+        complete = true
+    end, function()
+        while not complete or #chunks > 0 do
+            while not chunks[1] do sleep(0) end
+            local chunk = table.remove(chunks, 1)
+            local fn = {}
+            for i, v in ipairs(speakers) do fn[i] = function()
+                local name = peripheral.getName(v)
+                if config and not config.get("standardsMode") then
+                    v.playAudio(chunk[i] or chunk[1], 3)
+                    repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
+                else while not v.playAudio(chunk[i] or chunk[1]) do
+                    repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
+                end end
+            end end
+            parallel.waitForAll(table.unpack(fn))
+        end
+    end)
+end
+
+--- Returns an iterator to stream raw PCM data in CC format. Audio will automatically
+-- be resampled to 48 kHz, and optionally mixed down to mono. Data *must* be
+-- interleaved - this will not work with planar audio.
+-- @tparam string|table data The audio data, either as a raw string, or a table
+-- of values (in the format specified by `bitDepth` and `dataType`)
+-- @tparam[opt=8] number bitDepth The bit depth of the audio (8, 16, 24, 32); if `dataType` is "float" then this must be 32
+-- @tparam[opt="signed"] "signed"|"unsigned"|"float" dataType The type of each sample
+-- @tparam[opt=1] number channels The number of channels present in the audio
+-- @tparam[opt=48000] number sampleRate The sample rate of the audio in Hertz
+-- @tparam[opt=false] boolean bigEndian Whether the audio is big-endian or little-endian; ignored if data is a table
+-- @tparam[opt=false] boolean mono Whether to mix the audio down to mono
+-- @treturn function():{ { [number]... }... },number An iterator function that returns
+-- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
+-- the current position of the audio in seconds
+-- @treturn number The total length of the audio in seconds
+function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEndian, mono)
+    expect(1, data, "string", "table")
+    bitDepth = expect(2, bitDepth, "number", "nil") or 8
+    dataType = expect(3, dataType, "string", "nil") or "signed"
+    channels = expect(4, channels, "number", "nil") or 1
+    sampleRate = expect(5, sampleRate, "number", "nil") or 48000
+    expect(6, bigEndian, "boolean", "nil")
+    expect(7, mono, "boolean", "nil")
+    if bitDepth ~= 8 and bitDepth ~= 16 and bitDepth ~= 24 and bitDepth ~= 32 then error("bad argument #2 (invalid bit depth)", 2) end
+    if dataType ~= "signed" and dataType ~= "unsigned" and dataType ~= "float" then error("bad argument #3 (invalid data type)", 2) end
+    if dataType == "float" and bitDepth ~= 32 then error("bad argument #2 (float audio must have 32-bit depth)", 2) end
+    expect.range(channels, 1)
+    expect.range(sampleRate, 1)
+    local byteDepth = bitDepth / 8
+    local len = (#data / (type(data) == "table" and 1 or byteDepth)) / channels
+    local csize = jit and 7680 or 32768
+    local format = (bigEndian and ">" or "<") .. (dataType == "float" and "f" or ((dataType == "signed" and "i" or "I") .. byteDepth)):rep(csize)
+    local maxValue = 2^(bitDepth-1)
+    local pos, spos = 1, 1
+    local tmp = {}
+    local read
+    if type(data) == "table" then
+        if dataType == "signed" then
+            function read()
+                local s = data[pos]
+                pos = pos + 1
+                return s / (s < 0 and maxValue or maxValue-1)
+            end
+        elseif dataType == "unsigned" then
+            function read()
+                local s = data[pos]
+                pos = pos + 1
+                return (s - 128) / (s < 128 and maxValue or maxValue-1)
+            end
+        else
+            function read()
+                local s = data[pos]
+                pos = pos + 1
+                return s
+            end
+        end
+    elseif dataType == "float" then
+        function read()
+            if pos > #tmp then
+                if spos + (csize * byteDepth) > #data then
+                    local f = (bigEndian and ">" or "<") .. ("f"):rep((#data - spos + 1) / byteDepth)
+                    tmp = {f:unpack(data, spos)}
+                    spos = tmp[#tmp]
+                    tmp[#tmp] = nil
+                else
+                    tmp = {format:unpack(data, spos)}
+                    spos = tmp[#tmp]
+                    tmp[#tmp] = nil
+                end
+                pos = 1
+            end
+            local s = tmp[pos]
+            pos = pos + 1
+            return s
+        end
+    elseif dataType == "signed" then
+        function read()
+            if pos > #tmp then
+                if spos + (csize * byteDepth) > #data then
+                    local f = (bigEndian and ">" or "<") .. ("i" .. byteDepth):rep((#data - spos + 1) / byteDepth)
+                    tmp = {f:unpack(data, spos)}
+                    spos = tmp[#tmp]
+                    tmp[#tmp] = nil
+                else
+                    tmp = {format:unpack(data, spos)}
+                    spos = tmp[#tmp]
+                    tmp[#tmp] = nil
+                end
+                pos = 1
+            end
+            local s = tmp[pos]
+            pos = pos + 1
+            return s / (s < 0 and maxValue or maxValue-1)
+        end
+    else -- unsigned
+        function read()
+            if pos > #tmp then
+                if spos + (csize * byteDepth) > #data then
+                    local f = (bigEndian and ">" or "<") .. ("I" .. byteDepth):rep((#data - spos + 1) / byteDepth)
+                    tmp = {f:unpack(data, spos)}
+                    spos = tmp[#tmp]
+                    tmp[#tmp] = nil
+                else
+                    tmp = {format:unpack(data, spos)}
+                    spos = tmp[#tmp]
+                    tmp[#tmp] = nil
+                end
+                pos = 1
+            end
+            local s = tmp[pos]
+            pos = pos + 1
+            return (s - 128) / (s < 128 and maxValue or maxValue-1)
+        end
+    end
+    local d = {}
+    local ratio = 48000 / sampleRate
+    local interp = interpolate[aukit.defaultInterpolation]
+    for j = 1, (mono and 1 or channels) do d[j] = setmetatable({}, {__index = function(self, i)
+        if mono then for _ = 1, channels do self[i] = (rawget(self, i) or 0) + read() end self[i] = self[i] / channels
+        else self[i] = read() end
+        return rawget(self, i)
+    end}) end
+    local n = 0
+    local ok = true
+    return function()
+        if not ok then return nil end
+        for i = (n == 0 and interpolation_start[aukit.defaultInterpolation] or 1), interpolation_end[aukit.defaultInterpolation] do
+            if mono then
+                local s = 0
+                for j = 1, channels do
+                    local c = read()
+                    if not c then return nil end
+                    s = s + c
+                end
+                d[1][i] = s / channels
+            else for j = 1, channels do d[j][i] = read() if not d[j][i] then return nil end end end
+        end
+        local chunk = {}
+        for j = 1, #d do chunk[j] = {} end
+        ok = pcall(function()
+            for i = 1, 48000 do
+                for y = 1, #d do
+                    local x = ((n * 48000 + i - 1) / ratio) + 1
+                    if x % 1 == 0 then chunk[y][i] = d[y][x]
+                    else chunk[y][i] = interp(d[y], x) end
+                    chunk[y][i] = clamp(chunk[y][i] * (chunk[y][i] < 0 and 128 or 127), -128, 127)
+                end
+            end
+        end)
+        if #chunk[1] == 0 then return nil end
+        n = n + 1
+        return chunk, n - 1
+    end, len / sampleRate
+end
+
+--- Returns an iterator to stream data from a WAV file. Audio will automatically
+-- be resampled to 48 kHz, and optionally mixed down to mono.
 -- @tparam string data The WAV file to decode
--- @tparam speaker ... The speakers to play back to
-function aukit.stream.wav(data, ...)
+-- @tparam[opt=false] boolean mono Whether to mix the audio to mono
+-- @treturn function():{ { [number]... }... },number An iterator function that returns
+-- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
+-- the current position of the audio in seconds
+-- @treturn number The total length of the audio in seconds
+function aukit.stream.wav(data, mono)
     expect(1, data, "string")
     local channels, sampleRate, bitDepth, length
     local temp, pos = ("c4"):unpack(data)
@@ -1384,7 +1412,7 @@ function aukit.stream.wav(data, ...)
         elseif temp == "data" then
             local data = data:sub(pos, pos + size - 1)
             if #data < size then error("invalid WAV file", 2) end
-            return streamer(streamPCM(data, bitDepth, bitDepth == 8 and "unsigned" or "signed", channels, sampleRate, false, select("#", ...) == 1), ...)
+            return aukit.stream.pcm(data, bitDepth, bitDepth == 8 and "unsigned" or "signed", channels, sampleRate, false, mono)
         elseif temp == "fact" then
             -- TODO
             pos = pos + size
@@ -1393,13 +1421,17 @@ function aukit.stream.wav(data, ...)
     error("invalid WAV file", 2)
 end
 
---- Streams an AIFF file directly to one or more speakers. Audio will automatically
--- be resampled to 48 kHz. If only one speaker is passed, the audio will also be
--- mixed down to mono.
+--- Returns an iterator to stream data from an AIFF file. Audio will automatically
+-- be resampled to 48 kHz, and optionally mixed down to mono.
 -- @tparam string data The AIFF file to decode
--- @tparam speaker ... The speakers to play back to
-function aukit.stream.aiff(data, ...)
+-- @tparam[opt=false] boolean mono Whether to mix the audio to mono
+-- @treturn function():{ { [number]... }... },number An iterator function that returns
+-- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
+-- the current position of the audio in seconds
+-- @treturn number The total length of the audio in seconds
+function aukit.stream.aiff(data, mono)
     expect(1, data, "string")
+    expect(2, mono, "boolean", "nil")
     local channels, sampleRate, bitDepth, length, offset
     local temp, pos = ("c4"):unpack(data)
     if temp ~= "FORM" then error("bad argument #1 (not an AIFF file)", 2) end
@@ -1421,40 +1453,48 @@ function aukit.stream.aiff(data, ...)
             offset, _, pos = (">II"):unpack(data, pos)
             local data = data:sub(pos + offset, pos + offset + length - 1)
             if #data < length then error("invalid AIFF file", 2) end
-            return streamer(streamPCM(data, bitDepth, "signed", channels, sampleRate, true, select("#", ...) == 1), ...)
+            return aukit.stream.pcm(data, bitDepth, "signed", channels, sampleRate, true, mono)
         else pos = pos + size end
     end
     error("invalid AIFF file", 2)
 end
 
---- Streams an AU file directly to one or more speakers. Audio will automatically
--- be resampled to 48 kHz. If only one speaker is passed, the audio will also be
--- mixed down to mono.
+--- Returns an iterator to stream data from an AU file. Audio will automatically
+-- be resampled to 48 kHz, and optionally mixed down to mono.
 -- @tparam string data The AU file to decode
--- @tparam speaker ... The speakers to play back to
-function aukit.stream.au(data, ...)
+-- @tparam[opt=false] boolean mono Whether to mix the audio to mono
+-- @treturn function():{ { [number]... }... },number An iterator function that returns
+-- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
+-- the current position of the audio in seconds
+-- @treturn number The total length of the audio in seconds
+function aukit.stream.au(data, mono)
     expect(1, data, "string")
+    expect(2, mono, "boolean", "nil")
     local magic, offset, size, encoding, sampleRate, channels = (">c4IIIII"):unpack(data)
     if magic ~= ".snd" then error("invalid AU file", 2) end
-    if encoding == 2 then return streamer(streamPCM(data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 8, "signed", channels, sampleRate, true, select("#", ...) == 1), ...)
-    elseif encoding == 3 then return streamer(streamPCM(data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 16, "signed", channels, sampleRate, true, select("#", ...) == 1), ...)
-    elseif encoding == 4 then return streamer(streamPCM(data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 24, "signed", channels, sampleRate, true, select("#", ...) == 1), ...)
-    elseif encoding == 5 then return streamer(streamPCM(data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 32, "signed", channels, sampleRate, true, select("#", ...) == 1), ...)
-    elseif encoding == 6 then return streamer(streamPCM(data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 32, "float", channels, sampleRate, true, select("#", ...) == 1), ...)
+    if encoding == 2 then return aukit.stream.pcm(data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 8, "signed", channels, sampleRate, true, mono)
+    elseif encoding == 3 then return aukit.stream.pcm(data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 16, "signed", channels, sampleRate, true, mono)
+    elseif encoding == 4 then return aukit.stream.pcm(data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 24, "signed", channels, sampleRate, true, mono)
+    elseif encoding == 5 then return aukit.stream.pcm(data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 32, "signed", channels, sampleRate, true, mono)
+    elseif encoding == 6 then return aukit.stream.pcm(data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 32, "float", channels, sampleRate, true, mono)
     else error("unsupported encoding type " .. encoding, 2) end
 end
 
---- Streams a FLAC file directly to one or more speakers. Audio will automatically
--- be resampled to 48 kHz. If only one speaker is passed, the audio will also be
--- mixed down to mono.
+--- Returns an iterator to stream data from a FLAC file. Audio will automatically
+-- be resampled to 48 kHz, and optionally mixed down to mono.
 -- @tparam string data The FLAC file to decode
--- @tparam speaker ... The speakers to play back to
-function aukit.stream.flac(data, ...)
+-- @tparam[opt=false] boolean mono Whether to mix the audio to mono
+-- @treturn function():{ { [number]... }... },number An iterator function that returns
+-- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
+-- the current position of the audio in seconds
+-- @treturn number The total length of the audio in seconds
+function aukit.stream.flac(data, mono)
     expect(1, data, "string")
+    expect(2, mono, "boolean", "nil")
     local coro = coroutine.create(decodeFLAC)
-    local mono = select("#", ...) == 1
-    local _, sampleRate = coroutine.resume(coro, data, coroutine.yield)
-    return streamer(function()
+    local _, sampleRate, len = coroutine.resume(coro, data, coroutine.yield)
+    local pos = 0
+    return function()
         if coroutine.status(coro) == "dead" then return nil end
         local chunk = {{}}
         while #chunk[1] < sampleRate do
@@ -1480,8 +1520,10 @@ function aukit.stream.flac(data, ...)
             for i = 1, #src do dest[i] = src[i] * (src[i] < 0 and 128 or 127) end
             chunk[c] = dest
         end
-        return chunk
-    end, ...)
+        local p = pos
+        pos = pos + #audio.data[1] / 48000
+        return chunk, p
+    end, len / sampleRate
 end
 
 --- Amplifies the audio by the multiplier specified.
