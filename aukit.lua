@@ -1,7 +1,4 @@
 --- AUKit: Audio decoding and processing framework for ComputerCraft
--- By JackMacWindows
---
--- @module aukit
 --
 -- AUKit is a framework designed to simplify the process of loading, modifying,
 -- and playing audio files in various formats. It includes support for loading
@@ -42,6 +39,14 @@
 -- are recycled to keep them for other code.
 --
 -- For an example of how to use AUKit, see the accompanying auplay.lua file.
+--
+-- @author JackMacWindows
+-- @license MIT
+--
+-- <style>#content {width: unset !important;}</style>
+--
+-- @module aukit
+-- @set project=AUKit
 
 -- MIT License
 --
@@ -68,9 +73,10 @@
 local expect = require "cc.expect"
 local dfpwm = require "cc.audio.dfpwm"
 
-local aukit = {effects = {}, stream = {}, iterate = {}}
+local aukit = {}
+aukit.effects, aukit.stream = {}, {}
 
---- @class Audio
+--- @type Audio
 local Audio = {}
 local Audio_mt
 
@@ -106,15 +112,6 @@ local function intunpack(str, pos, sz, signed, be)
     else for i = 0, sz - 1 do n = n + str:byte(pos+i) * 2^(8*i) end end
     if signed and n >= 2^(sz*8-1) then n = n - 2^(sz*8) end
     return n, pos + sz
-end
-
-local function nosleep()
-    local id = tostring{}
-    os.queueEvent("nosleep", id)
-    repeat
-        local ev = table.pack(os.pullEvent())
-        if ev[1] ~= "nosleep" then os.queueEvent(table.unpack(ev, 1, ev.n)) end
-    until ev[1] == "nosleep" and ev[2] == id
 end
 
 local interpolate = {
@@ -450,7 +447,7 @@ local decodeFLAC do
 end
 
 --- Returns the length of the audio object in seconds.
--- @treturn The audio length
+-- @treturn number The audio length
 function Audio:len()
     return #self.data[1] / self.sampleRate
 end
@@ -472,7 +469,7 @@ function Audio:resample(sampleRate, interpolation)
     for y, c in ipairs(self.data) do
         local line = {}
         for i = 1, newlen do
-            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" nosleep() end
+            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" sleep(0) end
             local x = (i - 1) / ratio + 1
             if x % 1 == 0 then line[i] = c[x]
             else line[i] = clamp(interp(c, x), -1, 1) end
@@ -489,7 +486,7 @@ function Audio:mono()
     local cn = #self.data
     local start = os.epoch "utc"
     for i = 1, #self.data[1] do
-        if os.epoch "utc" - start > 5000 then start = os.epoch "utc" nosleep() end
+        if os.epoch "utc" - start > 5000 then start = os.epoch "utc" sleep(0) end
         local s = 0
         for c = 1, cn do s = s + self.data[c][i] end
         new.data[1][i] = s / cn
@@ -606,7 +603,7 @@ end
 -- outside the audio range ([-1, 1]). Channels that are shorter are padded with
 -- zeroes at the end, and non-existent channels are replaced with all zeroes.
 -- Any audio objects with a different sample rate are resampled to match this one.
--- @tparam number|Audio multiplier The multiplier to apply, or the first audio object
+-- @tparam number|Audio amplifier The multiplier to apply, or the first audio object
 -- @tparam[opt] Audio ... The objects to mix with this one
 -- @treturn Audio The new mixed audio object
 function Audio:mix(amplifier, ...)
@@ -717,13 +714,14 @@ function Audio:pcm(bitDepth, dataType, interleaved)
 end
 
 --- Returns a function that can be called to encode PCM samples in chunks.
--- This is useful as a for iterator.
+-- This is useful as a for iterator, and can be used with @{aukit.play}.
 -- @tparam[opt=131072] number chunkSize The size of each chunk
 -- @tparam[opt=8] number bitDepth The bit depth of the audio (8, 16, 24, 32)
 -- @tparam[opt="signed"] "signed"|"unsigned"|"float" dataType The type of each sample
--- @treturn function(state: table, pos: number):number,table... The iterator function
--- @treturn table The state for the iterator
--- @treturn number The initial position of the audio
+-- @treturn function():{ { [number]... }... },number An iterator function that returns
+-- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
+-- the current position of the audio in seconds
+-- @treturn number The total length of the audio in seconds
 function Audio:stream(chunkSize, bitDepth, dataType)
     chunkSize = expect(1, chunkSize, "number", "nil") or 131072
     bitDepth = expect(2, bitDepth, "number", "nil") or 8
@@ -731,7 +729,15 @@ function Audio:stream(chunkSize, bitDepth, dataType)
     if bitDepth ~= 8 and bitDepth ~= 16 and bitDepth ~= 24 and bitDepth ~= 32 then error("bad argument #2 (invalid bit depth)", 2) end
     if dataType ~= "signed" and dataType ~= "unsigned" and dataType ~= "float" then error("bad argument #3 (invalid data type)", 2) end
     if dataType == "float" and bitDepth ~= 32 then error("bad argument #2 (float audio must have 32-bit depth)", 2) end
-    return encodePCM, {audio = self, bitDepth = bitDepth, dataType = dataType, interleaved = false, multiple = true, len = chunkSize}, 1
+    local info, pos = {audio = self, bitDepth = bitDepth, dataType = dataType, interleaved = false, multiple = true, len = chunkSize}, 1
+    return function()
+        if info == nil then return nil end
+        local p = pos / self.sampleRate
+        local v = {encodePCM(info, pos)}
+        if v[1] == nil then info = nil return nil end
+        pos = table.remove(v, 1)
+        return v, p
+    end, #self.data[1] / self.sampleRate
 end
 
 --- Coverts the audio data to a WAV file.
@@ -760,6 +766,9 @@ Audio_mt = {__index = Audio, __add = Audio.combine, __mul = Audio.rep, __concat 
 function Audio_mt:__tostring()
     return "Audio: " .. self.sampleRate .. " Hz, " .. #self.data .. " channels, " .. (#self.data[1] / self.sampleRate) .. " seconds"
 end
+
+--- aukit
+-- @section aukit
 
 --- Creates a new audio object from the specified raw PCM data.
 -- @tparam string|table data The audio data, either as a raw string, or a table
@@ -878,14 +887,14 @@ function aukit.pcm(data, bitDepth, dataType, channels, sampleRate, interleaved, 
     if interleaved and channels > 1 then
         local d = obj.data
         for i = 1, len do
-            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" nosleep() end
+            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" sleep(0) end
             for j = 1, channels do d[j][i] = read() end
         end
     else for j = 1, channels do
         local line = {}
         obj.data[j] = line
         for i = 1, len do
-            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" nosleep() end
+            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" sleep(0) end
             line[i] = read()
         end
     end end
@@ -965,7 +974,7 @@ function aukit.adpcm(data, channels, sampleRate, topFirst, interleaved, predicto
     if interleaved then
         local d = obj.data
         for i = 1, len do
-            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" nosleep() end
+            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" sleep(0) end
             for j = 1, channels do
                 local nibble = read()
                 step_index[j] = clamp(step_index[j] + ima_index_table[nibble], 0, 88)
@@ -979,7 +988,7 @@ function aukit.adpcm(data, channels, sampleRate, topFirst, interleaved, predicto
         local line = {}
         local predictor, step_index, step = predictor[j], step_index[j], nil
         for i = 1, len do
-            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" nosleep() end
+            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" sleep(0) end
             local nibble = read()
             step_index = clamp(step_index + ima_index_table[nibble], 0, 88)
             local diff = ((nibble >= 8 and nibble - 16 or nibble) + 0.5) * step / 4
@@ -1174,7 +1183,7 @@ function aukit.noise(duration, amplitude, channels, sampleRate)
 end
 
 --- Packs a table with PCM data into a string using the specified data type.
--- @tparam { [number]... } data The PCM data to pack
+-- @tparam {[number]...} data The PCM data to pack
 -- @tparam[opt=8] number bitDepth The bit depth of the audio (8, 16, 24, 32); if `dataType` is "float" then this must be 32
 -- @tparam[opt="signed"] "signed"|"unsigned"|"float" dataType The type of each sample
 -- @tparam[opt=false] boolean bigEndian Whether the data should be big-endian or little-endian
@@ -1198,10 +1207,12 @@ function aukit.pack(data, bitDepth, dataType, bigEndian)
     return retval
 end
 
---- Plays back stream functions created by one of the `aukit.stream` functions.
--- @tparam function callback The iterator function that returns each chunk
+--- Plays back stream functions created by one of the @{aukit.stream} functions
+-- or @{Audio:stream}.
+-- @tparam function():{{[number]...}...} callback The iterator function that returns each chunk
 -- @tparam speaker ... The speakers to play on
 function aukit.play(callback, ...)
+    expect(1, callback, "function")
     local speakers = {...}
     local chunks = {}
     local complete = false
@@ -1226,6 +1237,9 @@ function aukit.play(callback, ...)
         end
     end)
 end
+
+--- aukit.stream
+-- @section aukit.stream
 
 --- Returns an iterator to stream raw PCM data in CC format. Audio will automatically
 -- be resampled to 48 kHz, and optionally mixed down to mono. Data *must* be
@@ -1382,6 +1396,43 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
     end, len / sampleRate
 end
 
+--- Returns an iterator to stream data from DFPWM data. Audio will automatically
+-- be resampled to 48 kHz. This only supports mono audio.
+-- @tparam string data The DFPWM data to decode
+-- @tparam[opt=48000] number sampleRate The sample rate of the audio in Hertz
+-- @treturn function():{ { [number]... }... },number An iterator function that
+-- returns chunks of the only channel's data as arrays of signed 8-bit 48kHz PCM,
+-- as well as the current position of the audio in seconds
+-- @treturn number The total length of the audio in seconds
+function aukit.stream.dfpwm(data, sampleRate)
+    expect(1, data, "string")
+    sampleRate = expect(2, sampleRate, "number", "nil") or 48000
+    expect.range(sampleRate, 1)
+    local decoder = dfpwm.make_decoder()
+    local pos = 1
+    local last = 0
+    return function()
+        if pos > #data then return nil end
+        local audio = decoder(data:sub(pos, pos + 6000))
+        if audio == nil or #audio == 0 then return nil end
+        audio[0], last = last, audio[#audio]
+        sleep(0)
+        local ratio = 48000 / sampleRate
+        local newlen = #audio * ratio
+        local interp = interpolate[aukit.defaultInterpolation]
+        local line = {}
+        for i = 1, newlen do
+            local x = (i - 1) / ratio + 1
+            if x % 1 == 0 then line[i] = audio[x]
+            else line[i] = clamp(interp(audio, x), -128, 127) end
+        end
+        sleep(0)
+        local p = pos
+        pos = pos + 6000
+        return {line}, p / sampleRate
+    end, #data * 8 / sampleRate
+end
+
 --- Returns an iterator to stream data from a WAV file. Audio will automatically
 -- be resampled to 48 kHz, and optionally mixed down to mono.
 -- @tparam string data The WAV file to decode
@@ -1526,6 +1577,9 @@ function aukit.stream.flac(data, mono)
     end, len / sampleRate
 end
 
+--- aukit.effects
+-- @section aukit.effects
+
 --- Amplifies the audio by the multiplier specified.
 -- @tparam Audio audio The audio to modify
 -- @tparam number multiplier The multiplier to apply
@@ -1538,7 +1592,7 @@ function aukit.effects.amplify(audio, multiplier)
     for c = 1, #audio.data do
         local ch = audio.data[c]
         for i = 1, #ch do
-            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" nosleep() end
+            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" sleep(0) end
             ch[i] = clamp(ch[i] * multiplier, -1, 1)
         end
     end
@@ -1581,7 +1635,7 @@ function aukit.effects.fade(audio, startTime, startAmplitude, endTime, endAmplit
         local start = startTime * audio.sampleRate
         local m = (endAmplitude - startAmplitude) / ((endTime - startTime) * audio.sampleRate)
         for i = start, endTime * audio.sampleRate do
-            if os.epoch "utc" - startt > 5000 then startt = os.epoch "utc" nosleep() end
+            if os.epoch "utc" - startt > 5000 then startt = os.epoch "utc" sleep(0) end
             ch[i] = clamp(ch[i] * (m * (i - start) + startAmplitude), -1, 1)
         end
     end
@@ -1615,7 +1669,7 @@ function aukit.effects.normalize(audio, peakAmplitude, independent)
         local max = 0
         for c = 1, #audio.data do
             local ch = audio.data[c]
-            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" nosleep() end
+            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" sleep(0) end
             for i = 1, #ch do max = math.max(max, math.abs(ch[i])) end
         end
         mult = peakAmplitude / max
@@ -1627,7 +1681,7 @@ function aukit.effects.normalize(audio, peakAmplitude, independent)
             for i = 1, #ch do max = math.max(max, math.abs(ch[i])) end
             mult = peakAmplitude / max
         end
-        if os.epoch "utc" - start > 5000 then start = os.epoch "utc" nosleep() end
+        if os.epoch "utc" - start > 5000 then start = os.epoch "utc" sleep(0) end
         for i = 1, #ch do
             ch[i] = clamp(ch[i] * mult, -1, 1)
         end
