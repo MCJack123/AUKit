@@ -35,8 +35,7 @@
 -- files with lower data size (8-bit mono PCM/WAV/AIFF is ideal), and potentially
 -- a lower sample rate, to reduce the load on the system - especially as all
 -- data gets converted to 8-bit DFPWM data on playback anyway. The code yields
--- internally when things take a long time to avoid abort timeouts, but events
--- are recycled to keep them for other code.
+-- internally when things take a long time to avoid abort timeouts.
 --
 -- For an example of how to use AUKit, see the accompanying auplay.lua file.
 --
@@ -470,7 +469,7 @@ function Audio:resample(sampleRate, interpolation)
     for y, c in ipairs(self.data) do
         local line = {}
         for i = 1, newlen do
-            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" sleep(0) end
+            if os.epoch "utc" - start > 3000 then start = os.epoch "utc" sleep(0) end
             local x = (i - 1) / ratio + 1
             if x % 1 == 0 then line[i] = c[x]
             else line[i] = clamp(interp(c, x), -1, 1) end
@@ -487,7 +486,7 @@ function Audio:mono()
     local cn = #self.data
     local start = os.epoch "utc"
     for i = 1, #self.data[1] do
-        if os.epoch "utc" - start > 5000 then start = os.epoch "utc" sleep(0) end
+        if os.epoch "utc" - start > 3000 then start = os.epoch "utc" sleep(0) end
         local s = 0
         for c = 1, cn do s = s + self.data[c][i] end
         new.data[1][i] = s / cn
@@ -888,14 +887,14 @@ function aukit.pcm(data, bitDepth, dataType, channels, sampleRate, interleaved, 
     if interleaved and channels > 1 then
         local d = obj.data
         for i = 1, len do
-            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" sleep(0) end
+            if os.epoch "utc" - start > 3000 then start = os.epoch "utc" sleep(0) end
             for j = 1, channels do d[j][i] = read() end
         end
     else for j = 1, channels do
         local line = {}
         obj.data[j] = line
         for i = 1, len do
-            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" sleep(0) end
+            if os.epoch "utc" - start > 3000 then start = os.epoch "utc" sleep(0) end
             line[i] = read()
         end
     end end
@@ -975,7 +974,7 @@ function aukit.adpcm(data, channels, sampleRate, topFirst, interleaved, predicto
     if interleaved then
         local d = obj.data
         for i = 1, len do
-            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" sleep(0) end
+            if os.epoch "utc" - start > 3000 then start = os.epoch "utc" sleep(0) end
             for j = 1, channels do
                 local nibble = read()
                 step_index[j] = clamp(step_index[j] + ima_index_table[nibble], 0, 88)
@@ -989,7 +988,7 @@ function aukit.adpcm(data, channels, sampleRate, topFirst, interleaved, predicto
         local line = {}
         local predictor, step_index, step = predictor[j], step_index[j], nil
         for i = 1, len do
-            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" sleep(0) end
+            if os.epoch "utc" - start > 3000 then start = os.epoch "utc" sleep(0) end
             local nibble = read()
             step_index = clamp(step_index + ima_index_table[nibble], 0, 88)
             local diff = ((nibble >= 8 and nibble - 16 or nibble) + 0.5) * step / 4
@@ -1015,7 +1014,22 @@ function aukit.dfpwm(data, channels, sampleRate)
     expect.range(channels, 1)
     expect.range(sampleRate, 1)
     if #data % channels ~= 0 then error("bad argument #1 (uneven amount of data per channel)", 2) end
-    return aukit.pcm(dfpwm.decode(data), 8, "signed", channels, sampleRate, false, false)
+    local audio = {}
+    local decoder = dfpwm.make_decoder()
+    local pos = 1
+    local last = 0
+    local start = os.epoch "utc"
+    while pos <= #data do
+        if os.epoch "utc" - start > 3000 then start = os.epoch "utc" sleep(0) end
+        local temp = decoder(data:sub(pos, pos + 6000))
+        if temp == nil or #temp == 0 then break end
+        for i=1,#temp do
+            audio[last+i] = temp[i]
+        end
+        last = last + #temp
+        pos = pos + 6000
+    end
+    return aukit.pcm(audio, 8, "signed", channels, sampleRate, false, false)
 end
 
 --- Creates a new audio object from a WAV file.
@@ -1430,7 +1444,7 @@ function aukit.stream.dfpwm(data, sampleRate)
         sleep(0)
         local p = pos
         pos = pos + 6000
-        return {line}, p / sampleRate
+        return {line}, p * 8 / sampleRate
     end, #data * 8 / sampleRate
 end
 
@@ -1593,7 +1607,7 @@ function aukit.effects.amplify(audio, multiplier)
     for c = 1, #audio.data do
         local ch = audio.data[c]
         for i = 1, #ch do
-            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" sleep(0) end
+            if os.epoch "utc" - start > 3000 then start = os.epoch "utc" sleep(0) end
             ch[i] = clamp(ch[i] * multiplier, -1, 1)
         end
     end
@@ -1670,7 +1684,7 @@ function aukit.effects.normalize(audio, peakAmplitude, independent)
         local max = 0
         for c = 1, #audio.data do
             local ch = audio.data[c]
-            if os.epoch "utc" - start > 5000 then start = os.epoch "utc" sleep(0) end
+            if os.epoch "utc" - start > 3000 then start = os.epoch "utc" sleep(0) end
             for i = 1, #ch do max = math.max(max, math.abs(ch[i])) end
         end
         mult = peakAmplitude / max
@@ -1682,7 +1696,7 @@ function aukit.effects.normalize(audio, peakAmplitude, independent)
             for i = 1, #ch do max = math.max(max, math.abs(ch[i])) end
             mult = peakAmplitude / max
         end
-        if os.epoch "utc" - start > 5000 then start = os.epoch "utc" sleep(0) end
+        if os.epoch "utc" - start > 3000 then start = os.epoch "utc" sleep(0) end
         for i = 1, #ch do
             ch[i] = clamp(ch[i] * mult, -1, 1)
         end
