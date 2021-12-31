@@ -577,7 +577,7 @@ end
 
 --- Splits this audio object into one or more objects with the specified channels.
 -- Passing a channel that doesn't exist will throw and error.
--- @tparam { [number]... } ... The lists of channels in each new object
+-- @tparam {[number]...} ... The lists of channels in each new object
 -- @treturn Audio... The new audio objects created from the channels in each list
 -- @usage Split a stereo track into independent mono objects
 --
@@ -701,7 +701,7 @@ end
 -- @tparam[opt=8] number bitDepth The bit depth of the audio (8, 16, 24, 32)
 -- @tparam[opt="signed"] "signed"|"unsigned"|"float" dataType The type of each sample
 -- @tparam[opt=true] boolean interleaved Whether to interleave each channel
--- @treturn { [number]... } The resulting audio data
+-- @treturn {[number]...} The resulting audio data
 function Audio:pcm(bitDepth, dataType, interleaved)
     bitDepth = expect(1, bitDepth, "number", "nil") or 8
     dataType = expect(2, dataType, "string", "nil") or "signed"
@@ -718,7 +718,7 @@ end
 -- @tparam[opt=131072] number chunkSize The size of each chunk
 -- @tparam[opt=8] number bitDepth The bit depth of the audio (8, 16, 24, 32)
 -- @tparam[opt="signed"] "signed"|"unsigned"|"float" dataType The type of each sample
--- @treturn function():{ { [number]... }... },number An iterator function that returns
+-- @treturn function():{{[number]...}...},number An iterator function that returns
 -- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
 -- the current position of the audio in seconds
 -- @treturn number The total length of the audio in seconds
@@ -1267,7 +1267,7 @@ end
 -- @tparam[opt=48000] number sampleRate The sample rate of the audio in Hertz
 -- @tparam[opt=false] boolean bigEndian Whether the audio is big-endian or little-endian; ignored if data is a table
 -- @tparam[opt=false] boolean mono Whether to mix the audio down to mono
--- @treturn function():{ { [number]... }... },number An iterator function that returns
+-- @treturn function():{{[number]...}...},number An iterator function that returns
 -- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
 -- the current position of the audio in seconds
 -- @treturn number The total length of the audio in seconds
@@ -1415,7 +1415,7 @@ end
 -- be resampled to 48 kHz. This only supports mono audio.
 -- @tparam string data The DFPWM data to decode
 -- @tparam[opt=48000] number sampleRate The sample rate of the audio in Hertz
--- @treturn function():{ { [number]... }... },number An iterator function that
+-- @treturn function():{{[number]...}...},number An iterator function that
 -- returns chunks of the only channel's data as arrays of signed 8-bit 48kHz PCM,
 -- as well as the current position of the audio in seconds
 -- @treturn number The total length of the audio in seconds
@@ -1452,7 +1452,7 @@ end
 -- be resampled to 48 kHz, and optionally mixed down to mono.
 -- @tparam string data The WAV file to decode
 -- @tparam[opt=false] boolean mono Whether to mix the audio to mono
--- @treturn function():{ { [number]... }... },number An iterator function that returns
+-- @treturn function():{{[number]...}...},number An iterator function that returns
 -- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
 -- the current position of the audio in seconds
 -- @treturn number The total length of the audio in seconds
@@ -1491,7 +1491,7 @@ end
 -- be resampled to 48 kHz, and optionally mixed down to mono.
 -- @tparam string data The AIFF file to decode
 -- @tparam[opt=false] boolean mono Whether to mix the audio to mono
--- @treturn function():{ { [number]... }... },number An iterator function that returns
+-- @treturn function():{{[number]...}...},number An iterator function that returns
 -- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
 -- the current position of the audio in seconds
 -- @treturn number The total length of the audio in seconds
@@ -1529,7 +1529,7 @@ end
 -- be resampled to 48 kHz, and optionally mixed down to mono.
 -- @tparam string data The AU file to decode
 -- @tparam[opt=false] boolean mono Whether to mix the audio to mono
--- @treturn function():{ { [number]... }... },number An iterator function that returns
+-- @treturn function():{{[number]...}...},number An iterator function that returns
 -- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
 -- the current position of the audio in seconds
 -- @treturn number The total length of the audio in seconds
@@ -1550,7 +1550,7 @@ end
 -- be resampled to 48 kHz, and optionally mixed down to mono.
 -- @tparam string data The FLAC file to decode
 -- @tparam[opt=false] boolean mono Whether to mix the audio to mono
--- @treturn function():{ { [number]... }... },number An iterator function that returns
+-- @treturn function():{{[number]...}...},number An iterator function that returns
 -- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
 -- the current position of the audio in seconds
 -- @treturn number The total length of the audio in seconds

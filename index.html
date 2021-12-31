@@ -130,7 +130,7 @@
  longest channel with zeroes.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#Audio:split">Audio:split (number)</a></td>
+	<td class="name" nowrap><a href="#Audio:split">Audio:split (...)</a></td>
 	<td class="summary">Splits this audio object into one or more objects with the specified channels.</td>
 	</tr>
 	<tr>
@@ -475,7 +475,7 @@
 </dd>
     <dt>
     <a name = "Audio:split"></a>
-    <strong>Audio:split (number)</strong>
+    <strong>Audio:split (...)</strong>
     </dt>
     <dd>
     Splits this audio object into one or more objects with the specified channels.
@@ -484,9 +484,9 @@
 
     <h3>Parameters:</h3>
     <ul>
-        <li><span class="parameter">number</span>
-            <span class="types"><span class="type">{</span></span>
-        ]... } ... The lists of channels in each new object
+        <li><span class="parameter">...</span>
+            <span class="types"><span class="type">{[number]...}</span></span>
+         The lists of channels in each new object
         </li>
     </ul>
 
@@ -620,8 +620,8 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">{</span></span>
-        [number]... } The resulting audio data
+           <span class="types"><span class="type">{[number]...}</span></span>
+        The resulting audio data
     </ol>
 
 
@@ -659,8 +659,8 @@
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><span class="type">function():{</span></span>
-         { [number]... }... },number An iterator function that returns
+           <span class="types"><span class="type">function():{{[number]...}...},number</span></span>
+         An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
@@ -1246,8 +1246,8 @@
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><span class="type">function():{</span></span>
-         { [number]... }... },number An iterator function that returns
+           <span class="types"><span class="type">function():{{[number]...}...},number</span></span>
+         An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
@@ -1284,8 +1284,8 @@
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><span class="type">function():{</span></span>
-         { [number]... }... },number An iterator function that
+           <span class="types"><span class="type">function():{{[number]...}...},number</span></span>
+         An iterator function that
  returns chunks of the only channel's data as arrays of signed 8-bit 48kHz PCM,
  as well as the current position of the audio in seconds</li>
         <li>
@@ -1322,8 +1322,8 @@
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><span class="type">function():{</span></span>
-         { [number]... }... },number An iterator function that returns
+           <span class="types"><span class="type">function():{{[number]...}...},number</span></span>
+         An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
@@ -1360,8 +1360,8 @@
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><span class="type">function():{</span></span>
-         { [number]... }... },number An iterator function that returns
+           <span class="types"><span class="type">function():{{[number]...}...},number</span></span>
+         An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
@@ -1398,8 +1398,8 @@
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><span class="type">function():{</span></span>
-         { [number]... }... },number An iterator function that returns
+           <span class="types"><span class="type">function():{{[number]...}...},number</span></span>
+         An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
@@ -1436,8 +1436,8 @@
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><span class="type">function():{</span></span>
-         { [number]... }... },number An iterator function that returns
+           <span class="types"><span class="type">function():{{[number]...}...},number</span></span>
+         An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
@@ -1689,7 +1689,7 @@
 </div> <!-- id="main" -->
 <div id="about">
 <i>generated by <a href="http://github.com/stevedonovan/LDoc">LDoc 1.4.6</a></i>
-<i style="float:right;">Last updated 2021-12-30 21:01:31 </i>
+<i style="float:right;">Last updated 2021-12-30 21:07:34 </i>
 </div> <!-- id="about" -->
 </div> <!-- id="container" -->
 </body>
