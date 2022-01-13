@@ -132,7 +132,7 @@ local interpolation_end = {none = 1, linear = 2, cubic = 3}
 
 local wavegen = {
     sine = function(x, freq, amplitude)
-        return math.sin(x * math.pi * freq) * amplitude
+        return math.sin(2 * x * math.pi * freq) * amplitude
     end,
     triangle = function(x, freq, amplitude)
         return 2.0 * math.abs(amplitude * math.fmod(2.0 * x * freq + 1.5, 2.0) - amplitude) - amplitude
