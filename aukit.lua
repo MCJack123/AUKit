@@ -748,7 +748,12 @@ function Audio:wav(bitDepth)
     bitDepth = expect(1, bitDepth, "number", "nil") or 16
     if bitDepth ~= 8 and bitDepth ~= 16 and bitDepth ~= 24 and bitDepth ~= 32 then error("bad argument #2 (invalid bit depth)", 2) end
     local data = self:pcm(bitDepth, bitDepth == 8 and "unsigned" or "signed", true)
-    return ("<c4Ic4c4IHHIIHHc4I"):pack("RIFF", #data + 36, "WAVE", "fmt ", 16, 1, #self.data, self.sampleRate, self.sampleRate * #self.data, #self.data * bitDepth / 8, bitDepth, "data", #data) .. data
+    local str = ""
+    local csize = jit and 7680 or 32768
+    local format = ((bitDepth == 8 and "I" or "i") .. (bitDepth / 8)):rep(csize)
+    for i = 1, #data - csize, csize do str = str .. format:pack(table.unpack(data, i, i + csize - 1)) end
+    str = str .. ((bitDepth == 8 and "I" or "i") .. (bitDepth / 8)):rep(#data % csize):pack(table.unpack(data, math.floor(#data / csize) * csize))
+    return ("<c4Ic4c4IHHIIHHc4I"):pack("RIFF", #str + 36, "WAVE", "fmt ", 16, 1, #self.data, self.sampleRate, self.sampleRate * #self.data, #self.data * bitDepth / 8, bitDepth, "data", #str) .. str
 end
 
 --- Converts the audio data to DFPWM. All channels share the same encoder, and
