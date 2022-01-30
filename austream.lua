@@ -3,7 +3,7 @@ local aukit = require "aukit"
 local path = ...
 local data
 if path:match("^https?://") then
-    local handle, err = http.get(path)
+    local handle, err = http.get(path, nil, true)
     if not handle then error("Could not connect to " .. path .. ": " .. err) end
     local code = handle.getResponseCode()
     if code ~= 200 then handle.close() error("Could not connect to " .. path .. ": HTTP " .. code) end
