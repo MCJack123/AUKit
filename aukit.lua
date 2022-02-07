@@ -1246,7 +1246,7 @@ function aukit.play(callback, ...)
             local fn = {}
             for i, v in ipairs(speakers) do fn[i] = function()
                 local name = peripheral.getName(v)
-                if config and not config.get("standardsMode") then
+                if _HOST:find("CraftOS-PC v2.6.4") and config and not config.get("standardsMode") then
                     v.playAudio(chunk[i] or chunk[1], 3)
                     repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
                 else while not v.playAudio(chunk[i] or chunk[1]) do
