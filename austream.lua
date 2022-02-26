@@ -21,7 +21,7 @@ elseif path:match("^rednet://%d+") or path:match("^rednet%+%l+://%d+") then
     if path ~= "" then rednet.send(id, name, proto) end
     function data()
         local i, msg
-        repeat i, msg = rednet.receive(proto) until i == id
+        repeat i, msg = rednet.receive(proto) until id == -1 or i == id
         return msg
     end
 else
