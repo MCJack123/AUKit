@@ -18,7 +18,7 @@ elseif path:match("^rednet://%d+") or path:match("^rednet%+%l+://%d+") then
     local proto, id, name = path:match("^rednet%+?(%l*)://(%d+)(/?.*)$")
     id = tonumber(id)
     if proto == "" then proto = nil end
-    if path ~= "" then rednet.send(id, name, proto) end
+    if path ~= "" and id >= 0 then rednet.send(id, name, proto) end
     function data()
         local i, msg
         repeat i, msg = rednet.receive(proto) until id == -1 or i == id
