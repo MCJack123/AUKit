@@ -8,6 +8,8 @@ Both `austream` and `auplay` take a path as an argument. `austream` additionally
 
 `austream` accepts Rednet URIs in the format `rednet[+<protocol>]://<id>[/<path>]`. If a protocol is specified, only messages with the specified protocol will be accepted. If a path is specified, it will be sent to the other computer before reading any data. If the ID is `-1`, all senders will be accepted, but no paths will be sent. The sender must send `nil` to report no more data is available. Example: `austream rednet+wav://6/file.wav`
 
+To avoid overflowing the CC event queue, it is recommended that a delay is added to senders 
+
 For information about the API, see [the Lua docs](https://mcjack123.github.io/AUKit/).
 
 ## License

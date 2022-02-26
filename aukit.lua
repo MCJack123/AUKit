@@ -1241,7 +1241,7 @@ function aukit.play(callback, ...)
         complete = true
     end), coroutine.create(function()
         while not complete or #chunks > 0 do
-            while not chunks[1] do sleep(0) end
+            while not chunks[1] do if complete then return end coroutine.yield(speakers) end
             local chunk = table.remove(chunks, 1)
             local fn = {}
             for i, v in ipairs(speakers) do fn[i] = function()
@@ -1259,7 +1259,7 @@ function aukit.play(callback, ...)
     local ok, af, bf
     local aq, bq = {}, {}
     repeat
-        if not complete and #aq > 0 then
+        if #aq > 0 then
             local event = table.remove(aq, 1)
             if af == speakers then
                 af = nil
@@ -1272,12 +1272,16 @@ function aukit.play(callback, ...)
         end
         if #bq > 0 then
             local event = table.remove(bq, 1)
+            if bf == speakers then
+                bf = nil
+                table.insert(bq, 1, event)
+            end
             if bf == nil or event[1] == bf then
                 ok, bf = coroutine.resume(b, table.unpack(event, 1, event.n))
                 if not ok then error(bf, 2) end
             end
         end
-        if coroutine.status(b) == "suspended" and ((complete or #aq == 0) and #bq == 0) then
+        if coroutine.status(b) == "suspended" and (#aq == 0 or #bq == 0) then
             os.queueEvent("__queue_end")
             while true do
                 local event = table.pack(os.pullEvent())
@@ -1286,7 +1290,18 @@ function aukit.play(callback, ...)
                 bq[#bq+1] = event
             end
         end
-    until coroutine.status(b) == "dead"
+    until coroutine.status(b) == "dead" or complete
+    while coroutine.status(b) == "suspended" and #bq > 0 do
+        local event = table.remove(bq, 1)
+        if bf == nil or event[1] == bf then
+            ok, bf = coroutine.resume(b, table.unpack(event, 1, event.n))
+            if not ok then error(bf, 2) end
+        end
+    end
+    while coroutine.status(b) == "suspended" do
+        ok, bf = coroutine.resume(b, os.pullEvent())
+        if not ok then error(bf, 2) end
+    end
 end
 
 --- aukit.stream
@@ -1310,7 +1325,7 @@ end
 -- the current position of the audio in seconds
 -- @treturn number The total length of the audio in seconds
 function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEndian, mono)
-    local fn
+    local fn, complete
     if type(data) == "function" then fn, data = data, data() end
     expect(1, data, "string", "table")
     bitDepth = expect(2, bitDepth, "number", "nil") or 8
@@ -1335,9 +1350,10 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
     if type(data) == "table" then
         if dataType == "signed" then
             function read()
+                if complete then return nil end
                 if fn and pos > #data then
                     data, pos = fn(), 1
-                    if not data then return nil end
+                    if not data then complete = true return nil end
                 end
                 local s = data[pos]
                 pos = pos + 1
@@ -1345,9 +1361,10 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
             end
         elseif dataType == "unsigned" then
             function read()
+                if complete then return nil end
                 if fn and pos > #data then
                     data, pos = fn(), 1
-                    if not data then return nil end
+                    if not data then complete = true return nil end
                 end
                 local s = data[pos]
                 pos = pos + 1
@@ -1355,9 +1372,10 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
             end
         else
             function read()
+                if complete then return nil end
                 if fn and pos > #data then
                     data, pos = fn(), 1
-                    if not data then return nil end
+                    if not data then complete = true return nil end
                 end
                 local s = data[pos]
                 pos = pos + 1
@@ -1366,10 +1384,11 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
         end
     elseif dataType == "float" then
         function read()
+            if complete then return nil end
             if pos > #tmp then
                 if fn and spos > #data then
                     data, spos = fn(), 1
-                    if not data then return nil end
+                    if not data then complete = true return nil end
                 end
                 if spos + (csize * byteDepth) > #data then
                     local f = (bigEndian and ">" or "<") .. ("f"):rep((#data - spos + 1) / byteDepth)
@@ -1389,10 +1408,11 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
         end
     elseif dataType == "signed" then
         function read()
+            if complete then return nil end
             if pos > #tmp then
                 if fn and spos > #data then
                     data, spos = fn(), 1
-                    if not data then return nil end
+                    if not data then complete = true return nil end
                 end
                 if spos + (csize * byteDepth) > #data then
                     local f = (bigEndian and ">" or "<") .. ("i" .. byteDepth):rep((#data - spos + 1) / byteDepth)
@@ -1412,10 +1432,11 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
         end
     else -- unsigned
         function read()
+            if complete then return nil end
             if pos > #tmp then
                 if fn and spos > #data then
                     data, spos = fn(), 1
-                    if not data then return nil end
+                    if not data then complete = true return nil end
                 end
                 if spos + (csize * byteDepth) > #data then
                     local f = (bigEndian and ">" or "<") .. ("I" .. byteDepth):rep((#data - spos + 1) / byteDepth)
@@ -1445,7 +1466,7 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
     local n = 0
     local ok = true
     return function()
-        if not ok then return nil end
+        if not ok or complete then return nil end
         for i = (n == 0 and interpolation_start[aukit.defaultInterpolation] or 1), interpolation_end[aukit.defaultInterpolation] do
             if mono then
                 local s = 0

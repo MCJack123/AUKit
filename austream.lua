@@ -12,7 +12,21 @@ if path:match("^https?://") then
 elseif path:match("^wss?://") then
     local handle, err = http.websocket(path)
     if not handle then error("Could not connect to " .. path .. ": " .. err) end
-    data = handle.receive
+    local closed = false
+    function data()
+        local _ = handle -- keep the handle alive
+        if closed then return nil end
+        while true do
+            local ev, url, msg, binary = os.pullEvent()
+            if ev == "websocket_message" and url == path then
+                if not binary then print("Warning: Text message detected! This audio may be corrupt.") end
+                return msg
+            elseif ev == "websocket_closed" and url == path then
+                closed = true
+                return nil
+            end
+        end
+    end
 elseif path:match("^rednet://%d+") or path:match("^rednet%+%l+://%d+") then
     peripheral.find("modem", rednet.open)
     local proto, id, name = path:match("^rednet%+?(%l*)://(%d+)(/?.*)$")
