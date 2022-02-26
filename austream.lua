@@ -52,4 +52,9 @@ elseif path:match("%.wav$") then aukit.play(aukit.stream.wav(data), peripheral.f
 elseif path:match("%.aiff?$") then aukit.play(aukit.stream.aiff(data), peripheral.find "speaker")
 elseif path:match("%.au$") then aukit.play(aukit.stream.au(data), peripheral.find "speaker")
 elseif path:match("%.flac$") then aukit.play(aukit.stream.flac(data), peripheral.find "speaker")
-else error("Unknown file type.") end
+elseif path:match("%.pcm$") or path:match("%.raw$") or path:match("^rednet%+?%l*://") then
+    local params = select(2, ...)
+    local v = {}
+    if params then v = textutils.unserialize("{" .. params:gsub("[^%w,=\"]+", "") .. "}") end
+    aukit.play(aukit.stream.pcm(data, v.bitDepth, v.dataType, v.channels, v.sampleRate, v.bigEndian), peripheral.find "speaker")
+else error("Unknown file type. Make sure to add the right file extension to the path/URL.") end

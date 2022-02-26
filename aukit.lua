@@ -1323,7 +1323,8 @@ end
 -- @treturn function():{{[number]...}...},number An iterator function that returns
 -- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
 -- the current position of the audio in seconds
--- @treturn number The total length of the audio in seconds
+-- @treturn number The total length of the audio in seconds, or the length of
+-- the first chunk if using a function
 function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEndian, mono)
     local fn, complete
     if type(data) == "function" then fn, data = data, data() end
@@ -1504,7 +1505,8 @@ end
 -- @treturn function():{{[number]...}...},number An iterator function that
 -- returns chunks of the only channel's data as arrays of signed 8-bit 48kHz PCM,
 -- as well as the current position of the audio in seconds
--- @treturn number The total length of the audio in seconds
+-- @treturn number The total length of the audio in seconds, or the length of
+-- the first chunk if using a function
 function aukit.stream.dfpwm(data, sampleRate)
     expect(1, data, "string", "function")
     sampleRate = expect(2, sampleRate, "number", "nil") or 48000
@@ -1578,7 +1580,7 @@ function aukit.stream.wav(data, mono)
                     else return fn() end
                 end
             end
-            return aukit.stream.pcm(data, bitDepth, bitDepth == 8 and "unsigned" or "signed", channels, sampleRate, false, mono)
+            return aukit.stream.pcm(data, bitDepth, bitDepth == 8 and "unsigned" or "signed", channels, sampleRate, false, mono), size / channels / (bitDepth / 8) / sampleRate
         elseif temp == "fact" then
             -- TODO
             pos = pos + size
@@ -1629,7 +1631,7 @@ function aukit.stream.aiff(data, mono)
                     else return fn() end
                 end
             end
-            return aukit.stream.pcm(data, bitDepth, "signed", channels, sampleRate, true, mono)
+            return aukit.stream.pcm(data, bitDepth, "signed", channels, sampleRate, true, mono), length / channels / (bitDepth / 8) / sampleRate
         else pos = pos + size end
     end
     error("invalid AIFF file", 2)
@@ -1658,11 +1660,11 @@ function aukit.stream.au(data, mono)
             else return fn() end
         end
     else data = data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil) end
-    if encoding == 2 then return aukit.stream.pcm(data, 8, "signed", channels, sampleRate, true, mono)
-    elseif encoding == 3 then return aukit.stream.pcm(data, 16, "signed", channels, sampleRate, true, mono)
-    elseif encoding == 4 then return aukit.stream.pcm(data, 24, "signed", channels, sampleRate, true, mono)
-    elseif encoding == 5 then return aukit.stream.pcm(data, 32, "signed", channels, sampleRate, true, mono)
-    elseif encoding == 6 then return aukit.stream.pcm(data, 32, "float", channels, sampleRate, true, mono)
+    if encoding == 2 then return aukit.stream.pcm(data, 8, "signed", channels, sampleRate, true, mono), size / channels / sampleRate
+    elseif encoding == 3 then return aukit.stream.pcm(data, 16, "signed", channels, sampleRate, true, mono), size / channels / 2 / sampleRate
+    elseif encoding == 4 then return aukit.stream.pcm(data, 24, "signed", channels, sampleRate, true, mono), size / channels / 3 / sampleRate
+    elseif encoding == 5 then return aukit.stream.pcm(data, 32, "signed", channels, sampleRate, true, mono), size / channels / 4 / sampleRate
+    elseif encoding == 6 then return aukit.stream.pcm(data, 32, "float", channels, sampleRate, true, mono), size / channels / 4 / sampleRate
     else error("unsupported encoding type " .. encoding, 2) end
 end
 
