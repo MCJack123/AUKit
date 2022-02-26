@@ -1236,10 +1236,10 @@ function aukit.play(callback, ...)
     local speakers = {...}
     local chunks = {}
     local complete = false
-    parallel.waitForAll(function()
-        for chunk in callback do chunks[#chunks+1] = chunk sleep(0) end
+    local a, b = coroutine.create(function()
+        for chunk in callback do chunks[#chunks+1] = chunk coroutine.yield(speakers) end
         complete = true
-    end, function()
+    end), coroutine.create(function()
         while not complete or #chunks > 0 do
             while not chunks[1] do sleep(0) end
             local chunk = table.remove(chunks, 1)
@@ -1256,6 +1256,37 @@ function aukit.play(callback, ...)
             parallel.waitForAll(table.unpack(fn))
         end
     end)
+    local ok, af, bf
+    local aq, bq = {}, {}
+    repeat
+        if not complete and #aq > 0 then
+            local event = table.remove(aq, 1)
+            if af == speakers then
+                af = nil
+                table.insert(aq, 1, event)
+            end
+            if af == nil or event[1] == af then
+                ok, af = coroutine.resume(a, table.unpack(event, 1, event.n))
+                if not ok then error(af, 2) end
+            end
+        end
+        if #bq > 0 then
+            local event = table.remove(bq, 1)
+            if bf == nil or event[1] == bf then
+                ok, bf = coroutine.resume(b, table.unpack(event, 1, event.n))
+                if not ok then error(bf, 2) end
+            end
+        end
+        if coroutine.status(b) == "suspended" and ((complete or #aq == 0) and #bq == 0) then
+            os.queueEvent("__queue_end")
+            while true do
+                local event = table.pack(os.pullEvent())
+                if event[1] == "__queue_end" then break end
+                aq[#aq+1] = event
+                bq[#bq+1] = event
+            end
+        end
+    until coroutine.status(b) == "dead"
 end
 
 --- aukit.stream
@@ -1264,8 +1295,10 @@ end
 --- Returns an iterator to stream raw PCM data in CC format. Audio will automatically
 -- be resampled to 48 kHz, and optionally mixed down to mono. Data *must* be
 -- interleaved - this will not work with planar audio.
--- @tparam string|table data The audio data, either as a raw string, or a table
--- of values (in the format specified by `bitDepth` and `dataType`)
+-- @tparam string|table|function data The audio data, either as a raw string, a
+-- table of values (in the format specified by `bitDepth` and `dataType`), or a
+-- function that returns either of those types. Functions will be called at
+-- least once before returning to get the type of data to use.
 -- @tparam[opt=8] number bitDepth The bit depth of the audio (8, 16, 24, 32); if `dataType` is "float" then this must be 32
 -- @tparam[opt="signed"] "signed"|"unsigned"|"float" dataType The type of each sample
 -- @tparam[opt=1] number channels The number of channels present in the audio
@@ -1277,6 +1310,8 @@ end
 -- the current position of the audio in seconds
 -- @treturn number The total length of the audio in seconds
 function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEndian, mono)
+    local fn
+    if type(data) == "function" then fn, data = data, data() end
     expect(1, data, "string", "table")
     bitDepth = expect(2, bitDepth, "number", "nil") or 8
     dataType = expect(3, dataType, "string", "nil") or "signed"
@@ -1300,18 +1335,30 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
     if type(data) == "table" then
         if dataType == "signed" then
             function read()
+                if fn and pos > #data then
+                    data, pos = fn(), 1
+                    if not data then return nil end
+                end
                 local s = data[pos]
                 pos = pos + 1
                 return s / (s < 0 and maxValue or maxValue-1)
             end
         elseif dataType == "unsigned" then
             function read()
+                if fn and pos > #data then
+                    data, pos = fn(), 1
+                    if not data then return nil end
+                end
                 local s = data[pos]
                 pos = pos + 1
                 return (s - 128) / (s < 128 and maxValue or maxValue-1)
             end
         else
             function read()
+                if fn and pos > #data then
+                    data, pos = fn(), 1
+                    if not data then return nil end
+                end
                 local s = data[pos]
                 pos = pos + 1
                 return s
@@ -1320,6 +1367,10 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
     elseif dataType == "float" then
         function read()
             if pos > #tmp then
+                if fn and spos > #data then
+                    data, spos = fn(), 1
+                    if not data then return nil end
+                end
                 if spos + (csize * byteDepth) > #data then
                     local f = (bigEndian and ">" or "<") .. ("f"):rep((#data - spos + 1) / byteDepth)
                     tmp = {f:unpack(data, spos)}
@@ -1339,6 +1390,10 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
     elseif dataType == "signed" then
         function read()
             if pos > #tmp then
+                if fn and spos > #data then
+                    data, spos = fn(), 1
+                    if not data then return nil end
+                end
                 if spos + (csize * byteDepth) > #data then
                     local f = (bigEndian and ">" or "<") .. ("i" .. byteDepth):rep((#data - spos + 1) / byteDepth)
                     tmp = {f:unpack(data, spos)}
@@ -1358,6 +1413,10 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
     else -- unsigned
         function read()
             if pos > #tmp then
+                if fn and spos > #data then
+                    data, spos = fn(), 1
+                    if not data then return nil end
+                end
                 if spos + (csize * byteDepth) > #data then
                     local f = (bigEndian and ">" or "<") .. ("I" .. byteDepth):rep((#data - spos + 1) / byteDepth)
                     tmp = {f:unpack(data, spos)}
@@ -1418,22 +1477,27 @@ end
 
 --- Returns an iterator to stream data from DFPWM data. Audio will automatically
 -- be resampled to 48 kHz. This only supports mono audio.
--- @tparam string data The DFPWM data to decode
+-- @tparam string|function():string data The DFPWM data to decode, or a function
+-- returning chunks to decode
 -- @tparam[opt=48000] number sampleRate The sample rate of the audio in Hertz
 -- @treturn function():{{[number]...}...},number An iterator function that
 -- returns chunks of the only channel's data as arrays of signed 8-bit 48kHz PCM,
 -- as well as the current position of the audio in seconds
 -- @treturn number The total length of the audio in seconds
 function aukit.stream.dfpwm(data, sampleRate)
-    expect(1, data, "string")
+    expect(1, data, "string", "function")
     sampleRate = expect(2, sampleRate, "number", "nil") or 48000
     expect.range(sampleRate, 1)
     local decoder = dfpwm.make_decoder()
     local pos = 1
     local last = 0
+    local isstr = type(data) == "string"
     return function()
         if pos > #data then return nil end
-        local audio = decoder(data:sub(pos, pos + 6000))
+        local d
+        if isstr then d = data:sub(pos, pos + 6000)
+        else d = data() if not d then return nil end end
+        local audio = decoder(d)
         if audio == nil or #audio == 0 then return nil end
         audio[0], last = last, audio[#audio]
         sleep(0)
@@ -1455,13 +1519,16 @@ end
 
 --- Returns an iterator to stream data from a WAV file. Audio will automatically
 -- be resampled to 48 kHz, and optionally mixed down to mono.
--- @tparam string data The WAV file to decode
+-- @tparam string|function():string data The WAV file to decode, or a function
+-- returning chunks to decode (the first chunk MUST contain the ENTIRE header)
 -- @tparam[opt=false] boolean mono Whether to mix the audio to mono
 -- @treturn function():{{[number]...}...},number An iterator function that returns
 -- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
 -- the current position of the audio in seconds
 -- @treturn number The total length of the audio in seconds
 function aukit.stream.wav(data, mono)
+    local fn
+    if type(data) == "function" then fn, data = data, data() end
     expect(1, data, "string")
     local channels, sampleRate, bitDepth, length
     local temp, pos = ("c4"):unpack(data)
@@ -1482,7 +1549,14 @@ function aukit.stream.wav(data, mono)
             bitDepth, pos = ("<H"):unpack(data, pos)
         elseif temp == "data" then
             local data = data:sub(pos, pos + size - 1)
-            if #data < size then error("invalid WAV file", 2) end
+            if not fn and #data < size then error("invalid WAV file", 2) end
+            if fn then
+                local first, f = data
+                data = function()
+                    if first then f, first = first return f
+                    else return fn() end
+                end
+            end
             return aukit.stream.pcm(data, bitDepth, bitDepth == 8 and "unsigned" or "signed", channels, sampleRate, false, mono)
         elseif temp == "fact" then
             -- TODO
@@ -1494,13 +1568,16 @@ end
 
 --- Returns an iterator to stream data from an AIFF file. Audio will automatically
 -- be resampled to 48 kHz, and optionally mixed down to mono.
--- @tparam string data The AIFF file to decode
+-- @tparam string|function():string data The AIFF file to decode, or a function
+-- returning chunks to decode (the first chunk MUST contain the ENTIRE header)
 -- @tparam[opt=false] boolean mono Whether to mix the audio to mono
 -- @treturn function():{{[number]...}...},number An iterator function that returns
 -- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
 -- the current position of the audio in seconds
 -- @treturn number The total length of the audio in seconds
 function aukit.stream.aiff(data, mono)
+    local fn
+    if type(data) == "function" then fn, data = data, data() end
     expect(1, data, "string")
     expect(2, mono, "boolean", "nil")
     local channels, sampleRate, bitDepth, length, offset
@@ -1523,7 +1600,14 @@ function aukit.stream.aiff(data, mono)
         elseif temp == "SSND" then
             offset, _, pos = (">II"):unpack(data, pos)
             local data = data:sub(pos + offset, pos + offset + length - 1)
-            if #data < length then error("invalid AIFF file", 2) end
+            if not fn and #data < length then error("invalid AIFF file", 2) end
+            if fn then
+                local first, f = data
+                data = function()
+                    if first then f, first = first return f
+                    else return fn() end
+                end
+            end
             return aukit.stream.pcm(data, bitDepth, "signed", channels, sampleRate, true, mono)
         else pos = pos + size end
     end
@@ -1532,44 +1616,78 @@ end
 
 --- Returns an iterator to stream data from an AU file. Audio will automatically
 -- be resampled to 48 kHz, and optionally mixed down to mono.
--- @tparam string data The AU file to decode
+-- @tparam string|function():string data The AU file to decode, or a function
+-- returning chunks to decode (the first chunk MUST contain the ENTIRE header)
 -- @tparam[opt=false] boolean mono Whether to mix the audio to mono
 -- @treturn function():{{[number]...}...},number An iterator function that returns
 -- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
 -- the current position of the audio in seconds
 -- @treturn number The total length of the audio in seconds
 function aukit.stream.au(data, mono)
+    local fn
+    if type(data) == "function" then fn, data = data, data() end
     expect(1, data, "string")
     expect(2, mono, "boolean", "nil")
     local magic, offset, size, encoding, sampleRate, channels = (">c4IIIII"):unpack(data)
     if magic ~= ".snd" then error("invalid AU file", 2) end
-    if encoding == 2 then return aukit.stream.pcm(data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 8, "signed", channels, sampleRate, true, mono)
-    elseif encoding == 3 then return aukit.stream.pcm(data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 16, "signed", channels, sampleRate, true, mono)
-    elseif encoding == 4 then return aukit.stream.pcm(data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 24, "signed", channels, sampleRate, true, mono)
-    elseif encoding == 5 then return aukit.stream.pcm(data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 32, "signed", channels, sampleRate, true, mono)
-    elseif encoding == 6 then return aukit.stream.pcm(data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 32, "float", channels, sampleRate, true, mono)
+    if fn then
+        local first, f = data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), nil
+        data = function()
+            if first then f, first = first return f
+            else return fn() end
+        end
+    else data = data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil) end
+    if encoding == 2 then return aukit.stream.pcm(data, 8, "signed", channels, sampleRate, true, mono)
+    elseif encoding == 3 then return aukit.stream.pcm(data, 16, "signed", channels, sampleRate, true, mono)
+    elseif encoding == 4 then return aukit.stream.pcm(data, 24, "signed", channels, sampleRate, true, mono)
+    elseif encoding == 5 then return aukit.stream.pcm(data, 32, "signed", channels, sampleRate, true, mono)
+    elseif encoding == 6 then return aukit.stream.pcm(data, 32, "float", channels, sampleRate, true, mono)
     else error("unsupported encoding type " .. encoding, 2) end
 end
 
 --- Returns an iterator to stream data from a FLAC file. Audio will automatically
 -- be resampled to 48 kHz, and optionally mixed down to mono.
--- @tparam string data The FLAC file to decode
+-- @tparam string|function():string data The FLAC file to decode, or a function
+-- returning chunks to decode
 -- @tparam[opt=false] boolean mono Whether to mix the audio to mono
 -- @treturn function():{{[number]...}...},number An iterator function that returns
 -- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
 -- the current position of the audio in seconds
 -- @treturn number The total length of the audio in seconds
 function aukit.stream.flac(data, mono)
-    expect(1, data, "string")
+    expect(1, data, "string", "function")
     expect(2, mono, "boolean", "nil")
+    local infn = false
+    if type(data) == "function" then data = setmetatable({str = "", fn = data, final = false, byte = function(self, start, e)
+        while start > #self.str do
+            infn = true
+            local d = self.fn()
+            infn = false
+            if not d then self.final = true return nil end
+            self.str = self.str .. d
+        end
+        while e and e > #self.str do
+            infn = true
+            local d = self.fn()
+            infn = false
+            if not d then self.final = true return nil end
+            self.str = self.str .. d
+        end
+        return self.str:byte(start, e)
+    end}, {__len = function(self) return self.final and #self.str or math.huge end}) end
+    local function saferesume(coro, ...)
+        local res = table.pack(coroutine.resume(coro, ...))
+        while res[1] and infn do res = table.pack(coroutine.resume(coro, coroutine.yield(table.unpack(res, 2, res.n)))) end
+        return table.unpack(res, 1, res.n)
+    end
     local coro = coroutine.create(decodeFLAC)
-    local _, sampleRate, len = coroutine.resume(coro, data, coroutine.yield)
+    local _, sampleRate, len = saferesume(coro, data, coroutine.yield)
     local pos = 0
     return function()
         if coroutine.status(coro) == "dead" then return nil end
         local chunk = {{}}
         while #chunk[1] < sampleRate do
-            local ok, res = coroutine.resume(coro)
+            local ok, res = saferesume(coro)
             if not ok or res == nil or res.sampleRate then break end
             sleep(0)
             for c = 1, #res do
