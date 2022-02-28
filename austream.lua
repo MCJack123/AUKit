@@ -74,6 +74,7 @@ local y = select(2, term.getCursorPos())
 local fg, bg = colors.toBlit(term.getTextColor()), colors.toBlit(term.getBackgroundColor())
 term.write(("00:00 %s %02d:%02d"):format(("\127"):rep(w - 12), math.floor(length / 60), length % 60))
 aukit.play(iter, function(pos)
+    pos = math.min(pos, 5999)
     local p = pos / length
     term.setCursorPos(1, y)
     if p > 1 then

@@ -1502,13 +1502,13 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
             end
         end)
         if #chunk[1] == 0 then return nil end
-        n = n + 1
+        n = n + #chunk[1]
         for y = 1, #d do
             local l2, l1 = d[y][#d[y]-1], d[y][#d[y]]
             d[y] = setmetatable({}, getmetatable(d[y]))
             d[y][-1], d[y][0] = l2, l1
         end
-        return chunk, n - 1
+        return chunk, (n - #chunk[1]) / 48000
     end, len / sampleRate
 end
 
