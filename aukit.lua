@@ -1007,7 +1007,7 @@ function aukit.adpcm(data, channels, sampleRate, topFirst, interleaved, predicto
 end
 
 --- Creates a new audio object from DFPWM1a data. All channels are expected to
--- share the same decoder, and are stored uninterleaved sequentially.
+-- share the same decoder, and are stored interleaved in a single stream.
 -- @tparam string data The audio data as a raw string
 -- @tparam[opt=1] number channels The number of channels present in the audio
 -- @tparam[opt=48000] number sampleRate The sample rate of the audio in Hertz
@@ -1034,7 +1034,7 @@ function aukit.dfpwm(data, channels, sampleRate)
         last = last + #temp
         pos = pos + 6000
     end
-    return aukit.pcm(audio, 8, "signed", channels, sampleRate, false, false)
+    return aukit.pcm(audio, 8, "signed", channels, sampleRate, true, false)
 end
 
 --- Creates a new audio object from a WAV file.
@@ -1230,20 +1230,29 @@ end
 --- Plays back stream functions created by one of the @{aukit.stream} functions
 -- or @{Audio:stream}.
 -- @tparam function():{{[number]...}...} callback The iterator function that returns each chunk
+-- @tparam[opt] function(pos:number) progress A callback to report progress to
+-- the caller; if omitted then this argument is the first speaker
 -- @tparam speaker ... The speakers to play on
-function aukit.play(callback, ...)
+function aukit.play(callback, progress, ...)
     expect(1, callback, "function")
+    expect(2, progress, "function", "table")
     local speakers = {...}
+    if type(progress) == "table" then
+        table.insert(speakers, 1, progress)
+        progress = nil
+    end
     local chunks = {}
     local complete = false
     local a, b = coroutine.create(function()
-        for chunk in callback do chunks[#chunks+1] = chunk coroutine.yield(speakers) end
+        for chunk, pos in callback do chunks[#chunks+1] = {chunk, pos} coroutine.yield(speakers) end
         complete = true
     end), coroutine.create(function()
         while not complete or #chunks > 0 do
             while not chunks[1] do if complete then return end coroutine.yield(speakers) end
             local chunk = table.remove(chunks, 1)
             local fn = {}
+            if progress then progress(chunk[2]) end
+            chunk = chunk[1]
             for i, v in ipairs(speakers) do fn[i] = function()
                 local name = peripheral.getName(v)
                 if _HOST:find("CraftOS-PC v2.6.4") and config and not config.get("standardsMode") then
@@ -1340,6 +1349,7 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
     if dataType == "float" and bitDepth ~= 32 then error("bad argument #2 (float audio must have 32-bit depth)", 2) end
     expect.range(channels, 1)
     expect.range(sampleRate, 1)
+    if channels == 1 then mono = false end
     local byteDepth = bitDepth / 8
     local len = (#data / (type(data) == "table" and 1 or byteDepth)) / channels
     local csize = jit and 7680 or 32768
@@ -1498,19 +1508,25 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
 end
 
 --- Returns an iterator to stream data from DFPWM data. Audio will automatically
--- be resampled to 48 kHz. This only supports mono audio.
+-- be resampled to 48 kHz. Multiple channels are expected to be interleaved in
+-- the encoded DFPWM data.
 -- @tparam string|function():string data The DFPWM data to decode, or a function
 -- returning chunks to decode
 -- @tparam[opt=48000] number sampleRate The sample rate of the audio in Hertz
--- @treturn function():{{[number]...}...},number An iterator function that
--- returns chunks of the only channel's data as arrays of signed 8-bit 48kHz PCM,
--- as well as the current position of the audio in seconds
+-- @tparam[opt=1] number channels The number of channels present in the audio
+-- @tparam[opt=false] boolean mono Whether to mix the audio down to mono
+-- @treturn function():{{[number]...}...},number An iterator function that returns
+-- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
+-- the current position of the audio in seconds
 -- @treturn number The total length of the audio in seconds, or the length of
 -- the first chunk if using a function
-function aukit.stream.dfpwm(data, sampleRate)
+function aukit.stream.dfpwm(data, sampleRate, channels, mono)
     expect(1, data, "string", "function")
     sampleRate = expect(2, sampleRate, "number", "nil") or 48000
+    channels = expect(3, channels, "number", "nil") or 1
     expect.range(sampleRate, 1)
+    expect.range(channels, 1)
+    if channels == 1 then mono = false end
     local decoder = dfpwm.make_decoder()
     local pos = 1
     local last = 0
@@ -1518,7 +1534,7 @@ function aukit.stream.dfpwm(data, sampleRate)
     return function()
         if pos > #data then return nil end
         local d
-        if isstr then d = data:sub(pos, pos + 6000)
+        if isstr then d = data:sub(pos, pos + 6000 * channels)
         else d = data() if not d then return nil end end
         local audio = decoder(d)
         if audio == nil or #audio == 0 then return nil end
@@ -1527,17 +1543,25 @@ function aukit.stream.dfpwm(data, sampleRate)
         local ratio = 48000 / sampleRate
         local newlen = #audio * ratio
         local interp = interpolate[aukit.defaultInterpolation]
-        local line = {}
-        for i = 1, newlen do
-            local x = (i - 1) / ratio + 1
-            if x % 1 == 0 then line[i] = audio[x]
-            else line[i] = clamp(interp(audio, x), -128, 127) end
+        local lines = {{}}
+        if not mono then for j = 1, channels do lines[j] = {} end end
+        for i = 1, newlen, channels do
+            local n = 0
+            for j = 1, channels do
+                local x = (i - 1) / ratio + 1
+                local s
+                if x % 1 == 0 then s = audio[x]
+                else s = clamp(interp(audio, x), -128, 127) end
+                if mono then n = n + s
+                else lines[j][math.ceil(i / channels)] = s end
+            end
+            if mono then lines[1][math.ceil(i / channels)] = n / channels end
         end
         sleep(0)
         local p = pos
-        pos = pos + 6000
-        return {line}, p * 8 / sampleRate
-    end, #data * 8 / sampleRate
+        pos = pos + 6000 * channels
+        return lines, p * 8 / sampleRate / channels
+    end, #data * 8 / sampleRate / channels
 end
 
 --- Returns an iterator to stream data from a WAV file. Audio will automatically

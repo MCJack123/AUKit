@@ -1,5 +1,10 @@
 local aukit = require "aukit"
 
+local speakers = {peripheral.find("speaker")}
+if #speakers == 0 then error("No speaker attached") end
+local mono = #speakers == 1
+if #speakers == 2 and peripheral.getName(speakers[1]) == "right" and peripheral.getName(speakers[2]) == "left" then speakers = {speakers[2], speakers[1]} end
+
 local path = ...
 local data
 if path:match("^https?://") then
@@ -46,15 +51,36 @@ else
     file.close()
 end
 
-print("Streaming...")
-if path:match("%.dfpwm$") then aukit.play(aukit.stream.dfpwm(data, 48000), peripheral.find "speaker")
-elseif path:match("%.wav$") then aukit.play(aukit.stream.wav(data), peripheral.find "speaker")
-elseif path:match("%.aiff?$") then aukit.play(aukit.stream.aiff(data), peripheral.find "speaker")
-elseif path:match("%.au$") then aukit.play(aukit.stream.au(data), peripheral.find "speaker")
-elseif path:match("%.flac$") then aukit.play(aukit.stream.flac(data), peripheral.find "speaker")
+local iter, length
+if path:match("%.dfpwm$") then
+    local params = select(2, ...)
+    local v = {}
+    if params then v = textutils.unserialize("{" .. params:gsub("[^%w,=\"]+", "") .. "}") end
+    iter, length = aukit.stream.dfpwm(data, v.sampleRate, v.channels, mono)
+elseif path:match("%.wav$") then iter, length = aukit.stream.wav(data, mono)
+elseif path:match("%.aiff?$") then iter, length = aukit.stream.aiff(data, mono)
+elseif path:match("%.au$") then iter, length = aukit.stream.au(data, mono)
+elseif path:match("%.flac$") then iter, length = aukit.stream.flac(data, mono)
 elseif path:match("%.pcm$") or path:match("%.raw$") or path:match("^rednet%+?%l*://") then
     local params = select(2, ...)
     local v = {}
     if params then v = textutils.unserialize("{" .. params:gsub("[^%w,=\"]+", "") .. "}") end
-    aukit.play(aukit.stream.pcm(data, v.bitDepth, v.dataType, v.channels, v.sampleRate, v.bigEndian), peripheral.find "speaker")
+    iter, length = aukit.stream.pcm(data, v.bitDepth, v.dataType, v.channels, v.sampleRate, v.bigEndian, mono)
 else error("Unknown file type. Make sure to add the right file extension to the path/URL.") end
+
+print("Streaming...")
+local w = term.getSize()
+local y = select(2, term.getCursorPos())
+local fg, bg = colors.toBlit(term.getTextColor()), colors.toBlit(term.getBackgroundColor())
+term.write(("00:00 %s %02d:%02d"):format(("\127"):rep(w - 12), math.floor(length / 60), length % 60))
+aukit.play(iter, function(pos)
+    local p = pos / length
+    term.setCursorPos(1, y)
+    if p > 1 then
+        term.blit(("%02d:%02d %s --:--"):format(math.floor(pos / 60), pos % 60, (" "):rep(w - 12)), fg:rep(w), bg:rep(6) .. fg:rep(w - 12) .. bg:rep(6))
+    else
+        term.blit(("%02d:%02d %s%s %02d:%02d"):format(math.floor(pos / 60), pos % 60, (" "):rep(math.floor((w - 12) * p)), ("\127"):rep((w - 12) - math.floor((w - 12) * p)), math.floor(length / 60), length % 60),
+            fg:rep(w), bg:rep(6) .. fg:rep(math.floor((w - 12) * p)) .. bg:rep((w - 12) - math.floor((w - 12) * p) + 6))
+    end
+end, table.unpack(speakers))
+print()
