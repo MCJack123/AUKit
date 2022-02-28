@@ -1266,7 +1266,7 @@ function aukit.play(callback, progress, ...)
         end
     end)
     local ok, af, bf
-    local aq, bq = {}, {}
+    local aq, bq = {{}}, {{}}
     repeat
         if #aq > 0 then
             local event = table.remove(aq, 1)

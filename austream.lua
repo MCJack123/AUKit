@@ -6,6 +6,7 @@ local mono = #speakers == 1
 if #speakers == 2 and peripheral.getName(speakers[1]) == "right" and peripheral.getName(speakers[2]) == "left" then speakers = {speakers[2], speakers[1]} end
 
 local path = ...
+if not path then error("Usage: austream <file/URL> [arguments for PCM/DFPWM]") end
 local data
 if path:match("^https?://") then
     local handle, err = http.get(path, nil, true)
