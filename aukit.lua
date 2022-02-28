@@ -1494,7 +1494,7 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
         ok = pcall(function()
             for i = 1, 48000 do
                 for y = 1, #d do
-                    local x = ((n * 48000 + i - 1) / ratio) + 1
+                    local x = ((i - 1) / ratio) + 1
                     if x % 1 == 0 then chunk[y][i] = d[y][x]
                     else chunk[y][i] = interp(d[y], x) end
                     chunk[y][i] = clamp(chunk[y][i] * (chunk[y][i] < 0 and 128 or 127), -128, 127)
@@ -1503,6 +1503,11 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
         end)
         if #chunk[1] == 0 then return nil end
         n = n + 1
+        for y = 1, #d do
+            local l2, l1 = d[y][#d[y]-1], d[y][#d[y]]
+            d[y] = setmetatable({}, getmetatable(d[y]))
+            d[y][-1], d[y][0] = l2, l1
+        end
         return chunk, n - 1
     end, len / sampleRate
 end
