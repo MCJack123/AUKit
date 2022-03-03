@@ -73,6 +73,8 @@ local expect = require "cc.expect"
 local dfpwm = require "cc.audio.dfpwm"
 
 local aukit = {}
+--- @tfield string _VERSION The version of AUKit that is loaded. This follows [SemVer](https://semver.org) format.
+aukit._VERSION = "1.0.0"
 aukit.effects, aukit.stream = {}, {}
 
 --- @tfield "none"|"linear"|"cubic" defaultInterpolation Default interpolation mode for @{Audio:resample} and other functions that need to resample.
