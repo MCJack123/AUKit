@@ -73,9 +73,10 @@ local expect = require "cc.expect"
 local dfpwm = require "cc.audio.dfpwm"
 
 local aukit = {}
---- @tfield string _VERSION The version of AUKit that is loaded. This follows [SemVer](https://semver.org) format.
-aukit._VERSION = "1.0.0"
 aukit.effects, aukit.stream = {}, {}
+
+--- @tfield string _VERSION The version of AUKit that is loaded. This follows [SemVer](https://semver.org) format.
+aukit._VERSION = "1.1.0"
 
 --- @tfield "none"|"linear"|"cubic" defaultInterpolation Default interpolation mode for @{Audio:resample} and other functions that need to resample.
 aukit.defaultInterpolation = "linear"
@@ -1234,11 +1235,18 @@ end
 -- @tparam function():{{[number]...}...} callback The iterator function that returns each chunk
 -- @tparam[opt] function(pos:number) progress A callback to report progress to
 -- the caller; if omitted then this argument is the first speaker
+-- @tparam[opt] number volume The volume to play the audio at; if omitted then
+-- this argument is the second speaker (if provided)
 -- @tparam speaker ... The speakers to play on
-function aukit.play(callback, progress, ...)
+function aukit.play(callback, progress, volume, ...)
     expect(1, callback, "function")
     expect(2, progress, "function", "table")
+    expect(3, volume, "number", "table", "nil")
     local speakers = {...}
+    if type(volume) == "table" then
+        table.insert(speakers, 1, volume)
+        volume = nil
+    end
     if type(progress) == "table" then
         table.insert(speakers, 1, progress)
         progress = nil
@@ -1258,9 +1266,9 @@ function aukit.play(callback, progress, ...)
             for i, v in ipairs(speakers) do fn[i] = function()
                 local name = peripheral.getName(v)
                 if _HOST:find("CraftOS-PC v2.6.4") and config and not config.get("standardsMode") then
-                    v.playAudio(chunk[i] or chunk[1], 3)
+                    v.playAudio(chunk[i] or chunk[1], volume)
                     repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
-                else while not v.playAudio(chunk[i] or chunk[1]) do
+                else while not v.playAudio(chunk[i] or chunk[1], volume) do
                     repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
                 end end
             end end

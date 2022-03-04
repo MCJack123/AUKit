@@ -7,6 +7,9 @@ if #speakers == 2 and peripheral.getName(speakers[1]) == "right" and peripheral.
 
 local path = ...
 if not path then error("Usage: austream <file/URL> [arguments for PCM/DFPWM]") end
+local params = select(2, ...)
+local v = {}
+if params then v = textutils.unserialize("{" .. params:gsub("[^%w,=\"%.]+", "") .. "}") end
 local data
 if path:match("^https?://") then
     local handle, err = http.get(path, nil, true)
@@ -53,20 +56,12 @@ else
 end
 
 local iter, length
-if path:match("%.dfpwm$") then
-    local params = select(2, ...)
-    local v = {}
-    if params then v = textutils.unserialize("{" .. params:gsub("[^%w,=\"]+", "") .. "}") end
-    iter, length = aukit.stream.dfpwm(data, v.sampleRate, v.channels, mono)
+if path:match("%.dfpwm$") then iter, length = aukit.stream.dfpwm(data, v.sampleRate, v.channels, mono)
 elseif path:match("%.wav$") then iter, length = aukit.stream.wav(data, mono)
 elseif path:match("%.aiff?$") then iter, length = aukit.stream.aiff(data, mono)
 elseif path:match("%.au$") then iter, length = aukit.stream.au(data, mono)
 elseif path:match("%.flac$") then iter, length = aukit.stream.flac(data, mono)
-elseif path:match("%.pcm$") or path:match("%.raw$") or path:match("^rednet%+?%l*://") then
-    local params = select(2, ...)
-    local v = {}
-    if params then v = textutils.unserialize("{" .. params:gsub("[^%w,=\"]+", "") .. "}") end
-    iter, length = aukit.stream.pcm(data, v.bitDepth, v.dataType, v.channels, v.sampleRate, v.bigEndian, mono)
+elseif path:match("%.pcm$") or path:match("%.raw$") or path:match("^rednet%+?%l*://") then iter, length = aukit.stream.pcm(data, v.bitDepth, v.dataType, v.channels, v.sampleRate, v.bigEndian, mono)
 else error("Unknown file type. Make sure to add the right file extension to the path/URL.") end
 
 print("Streaming...")
@@ -84,5 +79,5 @@ aukit.play(iter, function(pos)
         term.blit(("%02d:%02d %s%s %02d:%02d"):format(math.floor(pos / 60), pos % 60, (" "):rep(math.floor((w - 12) * p)), ("\127"):rep((w - 12) - math.floor((w - 12) * p)), math.floor(length / 60), length % 60),
             fg:rep(w), bg:rep(6) .. fg:rep(math.floor((w - 12) * p)) .. bg:rep((w - 12) - math.floor((w - 12) * p) + 6))
     end
-end, table.unpack(speakers))
+end, v.volume, table.unpack(speakers))
 print()
