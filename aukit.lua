@@ -76,7 +76,7 @@ local aukit = {}
 aukit.effects, aukit.stream = {}, {}
 
 --- @tfield string _VERSION The version of AUKit that is loaded. This follows [SemVer](https://semver.org) format.
-aukit._VERSION = "1.1.0"
+aukit._VERSION = "1.2.0"
 
 --- @tfield "none"|"linear"|"cubic" defaultInterpolation Default interpolation mode for @{Audio:resample} and other functions that need to resample.
 aukit.defaultInterpolation = "linear"
@@ -84,6 +84,32 @@ aukit.defaultInterpolation = "linear"
 --- @type Audio
 local Audio = {}
 local Audio_mt
+
+local dfpwmUUID = "3ac1fa38-811d-4361-a40d-ce53ca607cd1" -- UUID for DFPWM in WAV files
+
+local function uuidBytes(uuid) return uuid:gsub("-", ""):gsub("%x%x", function(c) return string.char(tonumber(c, 16)) end) end
+
+local wavExtensible = {
+    dfpwm = uuidBytes(dfpwmUUID),
+    pcm = uuidBytes "01000000-0000-1000-8000-00aa00389b71",
+    adpcm = uuidBytes "02000000-0000-1000-8000-00aa00389b71",
+    pcm_float = uuidBytes "03000000-0000-1000-8000-00aa00389b71"
+}
+
+local wavExtensibleChannels = {
+    0x04,
+    0x03,
+    0x07,
+    0x33,
+    0x37,
+    0x3F,
+    0x637,
+    0x63F,
+    0x50F7,
+    0x50FF,
+    0x56F7,
+    0x56FF
+}
 
 local ima_index_table = {
     [0] = -1, -1, -1, -1, 2, 4, 6, 8,
@@ -744,29 +770,46 @@ function Audio:stream(chunkSize, bitDepth, dataType)
 end
 
 --- Coverts the audio data to a WAV file.
--- @tparam[opt=16] number bitDepth The bit depth of the audio (8, 16, 24, 32)
+-- @tparam[opt=16] number bitDepth The bit depth of the audio (1 = DFPWM, 8, 16, 24, 32)
 -- @treturn string The resulting WAV file data
 function Audio:wav(bitDepth)
     -- TODO: Support float data
     bitDepth = expect(1, bitDepth, "number", "nil") or 16
-    if bitDepth ~= 8 and bitDepth ~= 16 and bitDepth ~= 24 and bitDepth ~= 32 then error("bad argument #2 (invalid bit depth)", 2) end
+    if bitDepth == 1 then
+        local str = self:dfpwm(true)
+        return ("<c4Ic4c4IHHIIHHHHIc16c4IIc4I"):pack(
+            "RIFF", #str + 72, "WAVE",
+            "fmt ", 40, 0xFFFE, #self.data, self.sampleRate, self.sampleRate * #self.data / 8, math.ceil(#self.data / 8), 1,
+                22, 1, wavExtensibleChannels[#self.data] or 0, wavExtensible.dfpwm,
+            "fact", 4, #self.data[1],
+            "data", #str) .. str
+    elseif bitDepth ~= 8 and bitDepth ~= 16 and bitDepth ~= 24 and bitDepth ~= 32 then error("bad argument #2 (invalid bit depth)", 2) end
     local data = self:pcm(bitDepth, bitDepth == 8 and "unsigned" or "signed", true)
     local str = ""
     local csize = jit and 7680 or 32768
     local format = ((bitDepth == 8 and "I" or "i") .. (bitDepth / 8)):rep(csize)
     for i = 1, #data - csize, csize do str = str .. format:pack(table.unpack(data, i, i + csize - 1)) end
     str = str .. ((bitDepth == 8 and "I" or "i") .. (bitDepth / 8)):rep(#data % csize):pack(table.unpack(data, math.floor(#data / csize) * csize))
-    return ("<c4Ic4c4IHHIIHHc4I"):pack("RIFF", #str + 36, "WAVE", "fmt ", 16, 1, #self.data, self.sampleRate, self.sampleRate * #self.data, #self.data * bitDepth / 8, bitDepth, "data", #str) .. str
+    return ("<c4Ic4c4IHHIIHHc4I"):pack("RIFF", #str + 36, "WAVE", "fmt ", 16, 1, #self.data, self.sampleRate, self.sampleRate * #self.data * bitDepth / 8, #self.data * bitDepth / 8, bitDepth, "data", #str) .. str
 end
 
 --- Converts the audio data to DFPWM. All channels share the same encoder, and
--- channels are stored sequentially uninterleaved.
--- @treturn string... The resulting DFPWM data for each channel
-function Audio:dfpwm()
-    local channels = {self:pcm(8, "signed", false)}
-    local encode = dfpwm.make_encoder()
-    for i = 1, #channels do channels[i] = encode(channels[i]) end
-    return table.unpack(channels)
+-- channels are stored sequentially uninterleaved if `interleaved` is false, or
+-- in one interleaved string if `interleaved` is true.
+-- @tparam[opt=true] boolean interleaved Whether to interleave the channels
+-- @treturn string... The resulting DFPWM data for each channel (only one string
+-- if `interleaved` is true)
+function Audio:dfpwm(interleaved)
+    expect(1, interleaved, "boolean", "nil")
+    if interleaved == nil then interleaved = true end
+    if interleaved then
+        return dfpwm.encode(self:pcm(8, "signed", true))
+    else
+        local channels = {self:pcm(8, "signed", false)}
+        local encode = dfpwm.make_encoder()
+        for i = 1, #channels do channels[i] = encode(channels[i]) end
+        return table.unpack(channels)
+    end
 end
 
 Audio_mt = {__index = Audio, __add = Audio.combine, __mul = Audio.rep, __concat = Audio.concat, __len = Audio.len, __name = "Audio"}
@@ -1040,13 +1083,13 @@ function aukit.dfpwm(data, channels, sampleRate)
     return aukit.pcm(audio, 8, "signed", channels, sampleRate, true, false)
 end
 
---- Creates a new audio object from a WAV file.
+--- Creates a new audio object from a WAV file. This accepts PCM files up to 32
+-- bits, including float data, as well as DFPWM files [as specified here](https://gist.github.com/MCJack123/90c24b64c8e626c7f130b57e9800962c).
 -- @tparam string data The WAV data to load
 -- @treturn Audio A new audio object with the contents of the WAV file
 function aukit.wav(data)
-    -- TODO: add float support
     expect(1, data, "string")
-    local channels, sampleRate, bitDepth, length
+    local channels, sampleRate, bitDepth, length, dataType, predictor, step_index
     local temp, pos = ("c4"):unpack(data)
     if temp ~= "RIFF" then error("bad argument #1 (not a WAV file)", 2) end
     pos = pos + 4
@@ -1057,16 +1100,33 @@ function aukit.wav(data)
         temp, pos = ("c4"):unpack(data, pos)
         size, pos = ("<I"):unpack(data, pos)
         if temp == "fmt " then
-            if size ~= 16 then error("unsupported WAV file", 2) end
-            temp, pos = ("<H"):unpack(data, pos)
-            if temp ~= 1 then error("unsupported WAV file", 2) end
-            channels, sampleRate, pos = ("<HI"):unpack(data, pos)
-            pos = pos + 6
-            bitDepth, pos = ("<H"):unpack(data, pos)
+            local chunk = data:sub(pos, pos + size - 1)
+            pos = pos + size
+            local format
+            format, channels, sampleRate, bitDepth = ("<HHIXIXHH"):unpack(chunk)
+            if format ~= 1 and format ~= 2 and format ~= 3 and format ~= 0xFFFE then error("unsupported WAV file", 2) end
+            if format == 1 then
+                dataType = bitDepth == 8 and "unsigned" or "signed"
+            elseif format == 0x11 then
+                dataType = "adpcm"
+                -- TODO: read in the correct length values
+            elseif format == 3 then
+                dataType = "float"
+            elseif format == 0xFFFE then
+                bitDepth = ("<H"):unpack(chunk, 19)
+                local uuid = chunk:sub(25, 40)
+                if uuid == wavExtensible.pcm then dataType = bitDepth == 8 and "unsigned" or "signed"
+                elseif uuid == wavExtensible.adpcm then dataType = "adpcm"
+                elseif uuid == wavExtensible.pcm_float then dataType = "float"
+                elseif uuid == wavExtensible.dfpwm then dataType = "dfpwm"
+                else error("unsupported WAV file", 2) end
+            end
         elseif temp == "data" then
             local data = data:sub(pos, pos + size - 1)
             if #data < size then error("invalid WAV file", 2) end
-            return aukit.pcm(data, bitDepth, bitDepth == 8 and "unsigned" or "signed", channels, sampleRate, true, false)
+            if dataType == "adpcm" then error("unsupported WAV file", 2) -- TODO
+            elseif dataType == "dfpwm" then return aukit.dfpwm(data, channels, sampleRate)
+            else return aukit.pcm(data, bitDepth, dataType, channels, sampleRate, true, false) end
         elseif temp == "fact" then
             -- TODO
             pos = pos + size
@@ -1580,7 +1640,8 @@ function aukit.stream.dfpwm(data, sampleRate, channels, mono)
 end
 
 --- Returns an iterator to stream data from a WAV file. Audio will automatically
--- be resampled to 48 kHz, and optionally mixed down to mono.
+-- be resampled to 48 kHz, and optionally mixed down to mono. This accepts PCM
+-- files up to 32 bits, including float data, as well as DFPWM files [as specified here](https://gist.github.com/MCJack123/90c24b64c8e626c7f130b57e9800962c).
 -- @tparam string|function():string data The WAV file to decode, or a function
 -- returning chunks to decode (the first chunk MUST contain the ENTIRE header)
 -- @tparam[opt=false] boolean mono Whether to mix the audio to mono
@@ -1592,7 +1653,7 @@ function aukit.stream.wav(data, mono)
     local fn
     if type(data) == "function" then fn, data = data, data() end
     expect(1, data, "string")
-    local channels, sampleRate, bitDepth, length
+    local channels, sampleRate, bitDepth, length, dataType
     local temp, pos = ("c4"):unpack(data)
     if temp ~= "RIFF" then error("bad argument #1 (not a WAV file)", 2) end
     pos = pos + 4
@@ -1603,12 +1664,27 @@ function aukit.stream.wav(data, mono)
         temp, pos = ("c4"):unpack(data, pos)
         size, pos = ("<I"):unpack(data, pos)
         if temp == "fmt " then
-            if size ~= 16 then error("unsupported WAV file", 2) end
-            temp, pos = ("<H"):unpack(data, pos)
-            if temp ~= 1 then error("unsupported WAV file", 2) end
-            channels, sampleRate, pos = ("<HI"):unpack(data, pos)
-            pos = pos + 6
-            bitDepth, pos = ("<H"):unpack(data, pos)
+            local chunk = data:sub(pos, pos + size - 1)
+            pos = pos + size
+            local format
+            format, channels, sampleRate, bitDepth = ("<HHIXIXHH"):unpack(chunk)
+            if format ~= 1 and format ~= 2 and format ~= 3 and format ~= 0xFFFE then error("unsupported WAV file", 2) end
+            if format == 1 then
+                dataType = bitDepth == 8 and "unsigned" or "signed"
+            elseif format == 0x11 then
+                dataType = "adpcm"
+                -- TODO: read in the correct length values
+            elseif format == 3 then
+                dataType = "float"
+            elseif format == 0xFFFE then
+                bitDepth = ("<H"):unpack(chunk, 19)
+                local uuid = chunk:sub(25, 40)
+                if uuid == wavExtensible.pcm then dataType = bitDepth == 8 and "unsigned" or "signed"
+                elseif uuid == wavExtensible.adpcm then dataType = "adpcm"
+                elseif uuid == wavExtensible.pcm_float then dataType = "float"
+                elseif uuid == wavExtensible.dfpwm then dataType = "dfpwm"
+                else error("unsupported WAV file", 2) end
+            end
         elseif temp == "data" then
             local data = data:sub(pos, pos + size - 1)
             if not fn and #data < size then error("invalid WAV file", 2) end
@@ -1619,7 +1695,9 @@ function aukit.stream.wav(data, mono)
                     else return fn() end
                 end
             end
-            return aukit.stream.pcm(data, bitDepth, bitDepth == 8 and "unsigned" or "signed", channels, sampleRate, false, mono), size / channels / (bitDepth / 8) / sampleRate
+            if dataType == "adpcm" then error("unsupported WAV file", 2) -- TODO
+            elseif dataType == "dfpwm" then return aukit.stream.dfpwm(data, sampleRate, channels, mono), size / channels / (bitDepth / 8) / sampleRate
+            else return aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, false, mono), size / channels / (bitDepth / 8) / sampleRate end
         elseif temp == "fact" then
             -- TODO
             pos = pos + size

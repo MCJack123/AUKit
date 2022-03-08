@@ -9,7 +9,12 @@ local path = ...
 if not path then error("Usage: austream <file/URL> [arguments for PCM/DFPWM]") end
 local params = select(2, ...)
 local v = {}
-if params then v = textutils.unserialize("{" .. params:gsub("[^%w,=\"%.]+", "") .. "}") end
+if params then
+    local fn, err = load("return {" .. params:gsub("[^%w,=\"%.]+", "") .. "}", "=unserialize", "t", setmetatable({}, {__index = function(_, idx) return idx end}))
+    if not fn then error(err) end
+    v = fn()
+end
+aukit.defaultInterpolation = v.interpolation or aukit.defaultInterpolation
 local data
 if path:match("^https?://") then
     local handle, err = http.get(path, nil, true)
@@ -56,12 +61,13 @@ else
 end
 
 local iter, length
-if path:match("%.dfpwm$") then iter, length = aukit.stream.dfpwm(data, v.sampleRate, v.channels, mono)
-elseif path:match("%.wav$") then iter, length = aukit.stream.wav(data, mono)
-elseif path:match("%.aiff?$") then iter, length = aukit.stream.aiff(data, mono)
-elseif path:match("%.au$") then iter, length = aukit.stream.au(data, mono)
-elseif path:match("%.flac$") then iter, length = aukit.stream.flac(data, mono)
-elseif path:match("%.pcm$") or path:match("%.raw$") or path:match("^rednet%+?%l*://") then iter, length = aukit.stream.pcm(data, v.bitDepth, v.dataType, v.channels, v.sampleRate, v.bigEndian, mono)
+if type(v.type) == "string" then v.type = v.type:lower() end
+if v.type == "dfpwm" or path:match("%.dfpwm$") then iter, length = aukit.stream.dfpwm(data, v.sampleRate, v.channels, mono)
+elseif v.type == "wav" or path:match("%.wav$") then iter, length = aukit.stream.wav(data, mono)
+elseif v.type == "aiff" or path:match("%.aiff?$") then iter, length = aukit.stream.aiff(data, mono)
+elseif v.type == "au" or path:match("%.au$") then iter, length = aukit.stream.au(data, mono)
+elseif v.type == "flac" or path:match("%.flac$") then iter, length = aukit.stream.flac(data, mono)
+elseif v.type == "pcm" or path:match("%.pcm$") or path:match("%.raw$") or path:match("^rednet%+?%l*://") then iter, length = aukit.stream.pcm(data, v.bitDepth, v.dataType, v.channels, v.sampleRate, v.bigEndian, mono)
 else error("Unknown file type. Make sure to add the right file extension to the path/URL.") end
 
 print("Streaming...")
