@@ -711,18 +711,20 @@ local function encodePCM(info, pos)
     local nc = #source
     local len = #source[1]
     if pos > len then return nil end
-    if info.interleaved then for n = pos, pos + info.len - 1 do for c = 1, nc do data[(n-1)*nc+c] = encode(source[c][n]) end end
+    local start = os.epoch "utc"
+    if info.interleaved then for n = pos, pos + info.len - 1 do if os.epoch "utc" - start > 3000 then start = os.epoch "utc" sleep(0) end for c = 1, nc do data[(n-1)*nc+c] = encode(source[c][n]) end end
     elseif info.multiple then
         for c = 1, nc do
             data[c] = {}
             for n = pos, pos + info.len - 1 do
+                if os.epoch "utc" - start > 3000 then start = os.epoch "utc" sleep(0) end
                 local s = source[c][n]
                 if not s then break end
                 data[c][n-pos+1] = encode(s)
             end
         end
         return pos + info.len, table.unpack(data)
-    else for c = 1, nc do for n = pos, pos + info.len - 1 do data[(c-1)*len+n] = encode(source[c][n]) end end end
+    else for c = 1, nc do for n = pos, pos + info.len - 1 do if os.epoch "utc" - start > 3000 then start = os.epoch "utc" sleep(0) end data[(c-1)*len+n] = encode(source[c][n]) end end end
     return data
 end
 
