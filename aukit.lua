@@ -1105,7 +1105,7 @@ function aukit.wav(data)
             local chunk = data:sub(pos, pos + size - 1)
             pos = pos + size
             local format
-            format, channels, sampleRate, bitDepth = ("<HHIXIXHH"):unpack(chunk)
+            format, channels, sampleRate, bitDepth = ("<HHIxxxxxxH"):unpack(chunk)
             if format ~= 1 and format ~= 2 and format ~= 3 and format ~= 0xFFFE then error("unsupported WAV file", 2) end
             if format == 1 then
                 dataType = bitDepth == 8 and "unsigned" or "signed"
@@ -1669,7 +1669,7 @@ function aukit.stream.wav(data, mono)
             local chunk = data:sub(pos, pos + size - 1)
             pos = pos + size
             local format
-            format, channels, sampleRate, bitDepth = ("<HHIXIXHH"):unpack(chunk)
+            format, channels, sampleRate, bitDepth = ("<HHIxxxxxxH"):unpack(chunk)
             if format ~= 1 and format ~= 2 and format ~= 3 and format ~= 0xFFFE then error("unsupported WAV file", 2) end
             if format == 1 then
                 dataType = bitDepth == 8 and "unsigned" or "signed"
