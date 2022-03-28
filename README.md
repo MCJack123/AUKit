@@ -14,5 +14,53 @@ To avoid overflowing the CC event queue, it is recommended that a delay is added
 
 For information about the API, see [the Lua docs](https://mcjack123.github.io/AUKit/).
 
+### `auconvert`
+`auconvert` is a program similar to FFmpeg that allows you to convert and modify audio files using AUKit. It is currently in beta, and has not been thoroughly tested; however, it appears to work.
+
+```
+auconvert - Modify and convert audio files
+
+Usage: auconvert <options...>
+
+Options:
+  -i|--input <path>                 Input file (can specify multiple)
+  -o|--output <path>                Output file (can specify multiple)
+  -f|--input-format <format>        Format of the last input file
+  -F|--output-format <format>       Format of the last output file
+    For available formats, use `-[f|F] list`
+  -b|--input-bit-depth <bits>       Bit depth of the last input file
+  -B|--output-bit-depth <bits>      Bit depth of the last output file
+  -t|--input-data-type <type>       Data type of the last input file
+  -T|--output-data-type <type>      Data type of the last output file
+  -c|--input-channels <number>      Channel count of the last input file
+  -C|--output-channels <number>     Channel count of the last output file
+  -r|--input-sample-rate <rate>     Sample rate of the last input file
+  -R|--output-sample-rate <rate>    Sample rate of the last output file
+
+  -e|--effect <name>[,<args...>]    Apply an effect to the last output file before writing
+    For available effects, use `-e list`
+  -m|--map <map command>            Map one or more input channels to an output channel
+     --interpolation <type>         Set the interpolation type for audio scaling (none, linear, cubic)
+  -h|--help                         Show this help
+
+Map command format:
+  General form: <input>[<operator><param>]...=<output>
+  Multiple files can be specified through <file index>:<channel> (defaults to file 1)
+  Only one map can be specified per output channel
+  Operators:
+    <a>+<b>: Concatenate channels
+    <a>&<b>: Mix channels
+    <a>*<n>: Repeat channel `n` times
+    <a>[[start],[end]]: Split channel (start/end refer to time in seconds, negative = from end, if end = 0 then end is end of file)
+    Order of operations: () [] * + &
+    Parentheses may be used to override operation order
+  Examples:
+    1=1             -> map input channel 1 to output channel 1
+    1:2=2:1         -> map input file 1 channel 2 to output file 2 channel 1
+    1:1+2:1+3:1=1   -> map the concatenation of the first channels of input files 1-3 to output file 1 channel 1
+    1&2=1           -> mix input channels 1 & 2 to output channel 1 (can work as stereo-to-mono mixdown)
+    1[,10]=1        -> map first 10 seconds of input channel 1 to output channel 1
+```
+
 ## License
 AUKit is licensed under the MIT license.

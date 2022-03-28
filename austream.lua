@@ -62,12 +62,12 @@ end
 
 local iter, length
 if type(v.type) == "string" then v.type = v.type:lower() end
-if v.type == "dfpwm" or path:match("%.dfpwm$") then iter, length = aukit.stream.dfpwm(data, v.sampleRate, v.channels, mono)
-elseif v.type == "wav" or path:match("%.wav$") then iter, length = aukit.stream.wav(data, mono)
-elseif v.type == "aiff" or path:match("%.aiff?$") then iter, length = aukit.stream.aiff(data, mono)
-elseif v.type == "au" or path:match("%.au$") then iter, length = aukit.stream.au(data, mono)
-elseif v.type == "flac" or path:match("%.flac$") then iter, length = aukit.stream.flac(data, mono)
-elseif v.type == "pcm" or path:match("%.pcm$") or path:match("%.raw$") or path:match("^rednet%+?%l*://") then iter, length = aukit.stream.pcm(data, v.bitDepth, v.dataType, v.channels, v.sampleRate, v.bigEndian, mono)
+if v.type == "dfpwm" or path:lower():match("%.dfpwm$") then iter, length = aukit.stream.dfpwm(data, v.sampleRate, v.channels, mono)
+elseif v.type == "wav" or path:lower():match("%.wav$") then iter, length = aukit.stream.wav(data, mono)
+elseif v.type == "aiff" or path:lower():match("%.aiff?$") then iter, length = aukit.stream.aiff(data, mono)
+elseif v.type == "au" or path:lower():match("%.au$") then iter, length = aukit.stream.au(data, mono)
+elseif v.type == "flac" or path:lower():match("%.flac$") then iter, length = aukit.stream.flac(data, mono)
+elseif v.type == "pcm" or path:lower():match("%.pcm$") or path:lower():match("%.raw$") or path:match("^rednet%+?%l*://") then iter, length = aukit.stream.pcm(data, v.bitDepth, v.dataType, v.channels, v.sampleRate, v.bigEndian, mono)
 else error("Unknown file type. Make sure to add the right file extension to the path/URL.") end
 
 print("Streaming...")

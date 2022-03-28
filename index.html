@@ -105,8 +105,24 @@
 <h2><a href="#Class_Audio">Class Audio </a></h2>
 <table class="function_list">
 	<tr>
+	<td class="name" nowrap><a href="#Audio.sampleRate">Audio.sampleRate</a></td>
+	<td class="summary"></td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#Audio.metadata">Audio.metadata</a></td>
+	<td class="summary"></td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#Audio.info">Audio.info</a></td>
+	<td class="summary"></td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#Audio:len">Audio:len ()</a></td>
 	<td class="summary">Returns the length of the audio object in seconds.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#Audio:channels">Audio:channels ()</a></td>
+	<td class="summary">Returns the number of channels in the audio object.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#Audio:resample">Audio:resample (sampleRate[, interpolation=aukit.defaultInterpolation])</a></td>
@@ -123,7 +139,7 @@
  this one (if necessary), and inserting silence in any missing channels.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#Audio:sub">Audio:sub ([start=1[, last=-1]])</a></td>
+	<td class="name" nowrap><a href="#Audio:sub">Audio:sub ([start=0[, last=0]])</a></td>
 	<td class="summary">Takes a subregion of the audio and returns a new audio object with its contents.</td>
 	</tr>
 	<tr>
@@ -218,6 +234,10 @@
 	<td class="name" nowrap><a href="#play">play (callback[, progress][, volume], ...)</a></td>
 	<td class="summary">Plays back stream functions created by one of the <a href="index.html#Audio:stream">aukit.stream</a> functions
  or <a href="index.html#Audio:stream">Audio:stream</a>.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#detect">detect (data)</a></td>
+	<td class="summary">Detect the type of audio file from the specified data.</td>
 	</tr>
 </table>
 <h2><a href="#aukit_stream">aukit.stream </a></h2>
@@ -332,6 +352,66 @@
 
     <dl class="function">
     <dt>
+    <a name = "Audio.sampleRate"></a>
+    <strong>Audio.sampleRate</strong>
+    </dt>
+    <dd>
+
+
+
+    <ul>
+        <li><span class="parameter">sampleRate</span>
+            <span class="types"><span class="type">number</span></span>
+         The sample rate of the audio.
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "Audio.metadata"></a>
+    <strong>Audio.metadata</strong>
+    </dt>
+    <dd>
+
+
+
+    <ul>
+        <li><span class="parameter">metadata</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a></span>
+         Stores any metadata read from the file if present.
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
+    <a name = "Audio.info"></a>
+    <strong>Audio.info</strong>
+    </dt>
+    <dd>
+
+
+
+    <ul>
+        <li><span class="parameter">info</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a></span>
+         Stores any decoder-specific information, including `bitDepth` and `dataType`.
+        </li>
+    </ul>
+
+
+
+
+
+</dd>
+    <dt>
     <a name = "Audio:len"></a>
     <strong>Audio:len ()</strong>
     </dt>
@@ -345,6 +425,26 @@
 
            <span class="types"><span class="type">number</span></span>
         The audio length
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "Audio:channels"></a>
+    <strong>Audio:channels ()</strong>
+    </dt>
+    <dd>
+    Returns the number of channels in the audio object.
+
+
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><span class="type">number</span></span>
+        The number of channels
     </ol>
 
 
@@ -435,7 +535,7 @@
 </dd>
     <dt>
     <a name = "Audio:sub"></a>
-    <strong>Audio:sub ([start=1[, last=-1]])</strong>
+    <strong>Audio:sub ([start=0[, last=0]])</strong>
     </dt>
     <dd>
     Takes a subregion of the audio and returns a new audio object with its contents.
@@ -447,12 +547,12 @@
         <li><span class="parameter">start</span>
             <span class="types"><span class="type">number</span></span>
          The start position of the audio in seconds
-         (<em>default</em> 1)
+         (<em>default</em> 0)
         </li>
         <li><span class="parameter">last</span>
             <span class="types"><span class="type">number</span></span>
-         The end position of the audio in seconds
-         (<em>default</em> -1)
+         The end position of the audio in seconds (0 means end of file)
+         (<em>default</em> 0)
         </li>
     </ul>
 
@@ -503,7 +603,7 @@
     </dt>
     <dd>
     Splits this audio object into one or more objects with the specified channels.
- Passing a channel that doesn't exist will throw and error.
+ Passing a channel that doesn't exist will throw an error.
 
 
     <h3>Parameters:</h3>
@@ -1237,6 +1337,42 @@
 
 
 </dd>
+    <dt>
+    <a name = "detect"></a>
+    <strong>detect (data)</strong>
+    </dt>
+    <dd>
+    Detect the type of audio file from the specified data.  This uses heuristic
+ detection methods to attempt to find the correct data type for files without
+ headers. It is not recommended to rely on the data type/bit depth reported
+ for PCM files - they are merely a suggestion.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">data</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         The audio file to check
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+        <li>
+           <span class="types"><a class="type" href="index.html#pcm">"pcm"</a>, <a class="type" href="index.html#dfpwm">"dfpwm"</a>, <a class="type" href="index.html#wav">"wav"</a>, <a class="type" href="index.html#aiff">"aiff"</a>, <a class="type" href="index.html#au">"au"</a>, <a class="type" href="index.html#flac">"flac"</a> or <span class="type">nil</span></span>
+        The type of audio file detected, or `nil` if none could be found</li>
+        <li>
+           <span class="types"><span class="type">number</span> or <span class="type">nil</span></span>
+        The bit depth for PCM data, if the type is "pcm" and the bit depth can be detected</li>
+        <li>
+           <span class="types"><span class="type">"signed"</span>, <span class="type">"unsigned"</span>, <span class="type">"float"</span> or <span class="type">nil</span></span>
+        The data type for PCM data, if the type is "pcm" and the type can be detected</li>
+    </ol>
+
+
+
+
+</dd>
 </dl>
     <h2 class="section-header "><a name="aukit_stream"></a>aukit.stream </h2>
 
@@ -1757,7 +1893,7 @@
 </div> <!-- id="main" -->
 <div id="about">
 <i>generated by <a href="http://github.com/stevedonovan/LDoc">LDoc 1.4.6</a></i>
-<i style="float:right;">Last updated 2022-03-07 21:45:45 </i>
+<i style="float:right;">Last updated 2022-03-28 03:25:32 </i>
 </div> <!-- id="about" -->
 </div> <!-- id="container" -->
 </body>

@@ -76,7 +76,7 @@ local aukit = {}
 aukit.effects, aukit.stream = {}, {}
 
 --- @tfield string _VERSION The version of AUKit that is loaded. This follows [SemVer](https://semver.org) format.
-aukit._VERSION = "1.2.0"
+aukit._VERSION = "1.3.0"
 
 --- @tfield "none"|"linear"|"cubic" defaultInterpolation Default interpolation mode for @{Audio:resample} and other functions that need to resample.
 aukit.defaultInterpolation = "linear"
@@ -84,6 +84,15 @@ aukit.defaultInterpolation = "linear"
 --- @type Audio
 local Audio = {}
 local Audio_mt
+
+--- @tfield number sampleRate The sample rate of the audio.
+Audio.sampleRate = nil
+
+--- @tfield table metadata Stores any metadata read from the file if present.
+Audio.metadata = nil
+
+--- @tfield table info Stores any decoder-specific information, including `bitDepth` and `dataType`.
+Audio.info = nil
 
 local dfpwmUUID = "3ac1fa38-811d-4361-a40d-ce53ca607cd1" -- UUID for DFPWM in WAV files
 
@@ -128,11 +137,67 @@ local ima_step_table = {
     15289, 16818, 18500, 20350, 22385, 24623, 27086, 29794, 32767
 }
 
+local flacMetadata = {
+    tracknumber = "trackNumber",
+    ["encoded-by"] = "encodedBy",
+    sourcemedia = "sourceMedia",
+    labelno = "labelNumber",
+    discnumber = "discNumber",
+    partnumber = "partNumber",
+    productnumber = "productNumber",
+    catalognumber = "catalogNumber",
+    ["release date"] = "releaseDate",
+    ["source medium"] = "sourceMedium",
+    ["source artist"] = "sourceArtist",
+    ["guest artist"] = "guestArtist",
+    ["source work"] = "sourceWork",
+    disctotal = "discCount",
+    tracktotal = "trackCount",
+    parttotal = "partCount",
+    tcm = "composer"
+}
+
+local wavMetadata = {
+    IPRD = "album",
+    INAM = "title",
+    IART = "artist",
+    IWRI = "author",
+    IMUS = "composer",
+    IPRO = "producer",
+    IPRT = "trackNumber",
+    ITRK = "trackNumber",
+    IFRM = "trackCount",
+    PRT1 = "partNumber",
+    PRT2 = "partCount",
+    TLEN = "length",
+    IRTD = "rating",
+    ICRD = "date",
+    ITCH = "encodedBy",
+    ISFT = "encoder",
+    ISRF = "media",
+    IGNR = "genre",
+    ICMT = "comment",
+    ICOP = "copyright",
+    ILNG = "language"
+}
+
+local function utf8decode(str)
+    local codes = {utf8.codepoint(str, 1, -1)}
+    for i, v in ipairs(codes) do if v > 0xFF then codes[i] = 0x3F end end
+    return string.char(table.unpack(codes))
+end
+
 local function clamp(n, min, max) return math.max(math.min(n, max), min) end
 
 local function expectAudio(n, var)
     if type(var) == "table" and getmetatable(var) == Audio_mt then return var end
     expect(n, var, "Audio") -- always fails
+end
+
+local function copy(tab)
+    local t = {}
+    for k, v in pairs(tab) do t[k] = v end
+    return t
 end
 
 local function intunpack(str, pos, sz, signed, be)
@@ -442,6 +507,7 @@ local decodeFLAC do
         if temp ~= 0x664C6143 then error("Invalid magic string") end
         local sampleRate, numChannels, sampleDepth, numSamples
         local last = false
+        local meta = {}
         while not last do
             temp, pos = inp:byte(pos), pos + 1
             last = bit32.btest(temp, 0x80)
@@ -456,6 +522,15 @@ local decodeFLAC do
                 numSamples, pos = intunpack(inp, pos + 2, 4, false, true)
                 numSamples = numSamples + bit32.band(inp:byte(pos-5), 15) * 2^32
                 pos = pos + 16
+            elseif type == 4 then
+                local ncomments
+                meta.vendor, ncomments, pos = ("<s4I4"):unpack(inp, pos)
+                for i = 1, ncomments do
+                    local str
+                    str, pos = utf8decode(("<s4"):unpack(inp, pos))
+                    local k, v = str:match "^([^=]+)=(.*)$"
+                    if k then meta[flacMetadata[k:lower()] or k:lower()] = v end
+                end
             else
                 pos = pos + length
             end
@@ -470,7 +545,7 @@ local decodeFLAC do
         -- Decode FLAC audio frames and write raw samples
         inp = BitInputStream(inp, pos)
         repeat until not decodeFrame(inp, numChannels, sampleDepth, out, callback)
-        if not callback then return {sampleRate = sampleRate, data = out} end
+        if not callback then return {sampleRate = sampleRate, data = out, metadata = meta, info = {bitDepth = sampleDepth, dataType = "signed"}} end
     end
 
 end
@@ -479,6 +554,12 @@ end
 -- @treturn number The audio length
 function Audio:len()
     return #self.data[1] / self.sampleRate
+end
+
+--- Returns the number of channels in the audio object.
+-- @treturn number The number of channels
+function Audio:channels()
+    return #self.data
 end
 
 --- Creates a new audio object with the data resampled to a different sample rate.
@@ -490,7 +571,7 @@ function Audio:resample(sampleRate, interpolation)
     expect(1, sampleRate, "number")
     interpolation = expect(2, interpolation, "string", "nil") or aukit.defaultInterpolation
     if interpolation ~= "none" and interpolation ~= "linear" and interpolation ~= "cubic" then error("bad argument #2 (invalid interpolation type)", 2) end
-    local new = setmetatable({sampleRate = sampleRate, data = {}}, Audio_mt)
+    local new = setmetatable({sampleRate = sampleRate, data = {}, metadata = copy(self.metadata), info = copy(self.info)}, Audio_mt)
     local ratio = sampleRate / self.sampleRate
     local newlen = #self.data[1] * ratio
     local interp = interpolate[interpolation]
@@ -511,7 +592,7 @@ end
 --- Mixes down all channels to a new mono-channel audio object.
 -- @treturn Audio A new audio object with the audio mixed to mono
 function Audio:mono()
-    local new = setmetatable({sampleRate = self.sampleRate, data = {{}}}, Audio_mt)
+    local new = setmetatable({sampleRate = self.sampleRate, data = {{}}, metadata = copy(self.metadata), info = copy(self.info)}, Audio_mt)
     local cn = #self.data
     local start = os.epoch "utc"
     for i = 1, #self.data[1] do
@@ -538,7 +619,7 @@ function Audio:concat(...)
         l[i] = #audios[i].data[1]
         cn = math.max(cn, #audios[i].data)
     end
-    local obj = setmetatable({sampleRate = self.sampleRate, data = {}}, Audio_mt)
+    local obj = setmetatable({sampleRate = self.sampleRate, data = {}, metadata = copy(self.metadata), info = copy(self.info)}, Audio_mt)
     for c = 1, cn do
         local ch = {}
         local pos = 0
@@ -555,19 +636,19 @@ end
 
 --- Takes a subregion of the audio and returns a new audio object with its contents.
 -- This takes the same arguments as @{string.sub}, but positions start at 0.
--- @tparam[opt=1] number start The start position of the audio in seconds
--- @tparam[opt=-1] number last The end position of the audio in seconds
+-- @tparam[opt=0] number start The start position of the audio in seconds
+-- @tparam[opt=0] number last The end position of the audio in seconds (0 means end of file)
 -- @treturn Audio The new split audio object
 function Audio:sub(start, last)
-    start = math.floor(expect(1, start, "number", "nil") or 1)
-    last = math.floor(expect(2, last, "number", "nil") or -1)
+    start = math.floor(expect(1, start, "number", "nil") or 0)
+    last = math.floor(expect(2, last, "number", "nil") or 0)
     local len = #self.data[1] / self.sampleRate
     if start < 0 then start = len + start end
-    if last < 0 then last = len + last end
-    expect.range(start, 1, len)
-    expect.range(last, 1, len)
+    if last <= 0 then last = len + last end
+    expect.range(start, 0, len)
+    expect.range(last, 0, len)
     start, last = start * self.sampleRate + 1, last * self.sampleRate + 1
-    local obj = setmetatable({sampleRate = self.sampleRate, data = {}}, Audio_mt)
+    local obj = setmetatable({sampleRate = self.sampleRate, data = {}, metadata = copy(self.metadata), info = copy(self.info)}, Audio_mt)
     for c = 1, #self.data do
         local ch = {}
         local sch = self.data[c]
@@ -591,7 +672,7 @@ function Audio:combine(...)
         if audios[i].sampleRate ~= self.sampleRate then audios[i] = audios[i]:resample(self.sampleRate) end
         len = math.max(len, #audios[i].data[1])
     end
-    local obj = setmetatable({sampleRate = self.sampleRate, data = {}}, Audio_mt)
+    local obj = setmetatable({sampleRate = self.sampleRate, data = {}, metadata = copy(self.metadata), info = copy(self.info)}, Audio_mt)
     local pos = 0
     for a = 1, #audios do
         for c = 1, #audios[a].data do
@@ -605,7 +686,7 @@ function Audio:combine(...)
 end
 
 --- Splits this audio object into one or more objects with the specified channels.
--- Passing a channel that doesn't exist will throw and error.
+-- Passing a channel that doesn't exist will throw an error.
 -- @tparam {[number]...} ... The lists of channels in each new object
 -- @treturn Audio... The new audio objects created from the channels in each list
 -- @usage Split a stereo track into independent mono objects
@@ -615,12 +696,13 @@ function Audio:split(...)
     local retval = {}
     for n, cl in ipairs{...} do
         expect(n, cl, "table")
-        local obj = setmetatable({sampleRate = self.sampleRate, data = {}}, Audio_mt)
+        if #cl == 0 then error("bad argument #" .. n .. " (cannot use empty table)") end
+        local obj = setmetatable({sampleRate = self.sampleRate, data = {}, metadata = copy(self.metadata), info = copy(self.info)}, Audio_mt)
         for cd, cs in ipairs(cl) do
             local sch, ch = self.data[expect(cd, cs, "number")], {}
             if not sch then error("channel " .. cs .. " (in argument " .. n .. ") out of range", 2) end
             for i = 1, #sch do ch[i] = sch[i] end
-            obj[cd] = ch
+            obj.data[cd] = ch
         end
         retval[#retval+1] = obj
     end
@@ -653,7 +735,7 @@ function Audio:mix(amplifier, ...)
         table.insert(audios, 2, amplifier)
         amplifier = 1
     end
-    local obj = setmetatable({sampleRate = self.sampleRate, data = {}}, Audio_mt)
+    local obj = setmetatable({sampleRate = self.sampleRate, data = {}, metadata = copy(self.metadata), info = copy(self.info)}, Audio_mt)
     for c = 1, cn do
         local ch = {}
         local sch = {}
@@ -663,7 +745,7 @@ function Audio:mix(amplifier, ...)
             for a = 1, #audios do if sch[a] then s = s + (sch[a][i] or 0) end end
             ch[i] = clamp(s * amplifier, -1, 1)
         end
-        obj[c] = ch
+        obj.data[c] = ch
     end
     return obj
 end
@@ -674,7 +756,7 @@ end
 function Audio:rep(count)
     if type(self) ~= "table" and type(count) == "table" then self, count = count, self end
     expect(1, count, "number")
-    local obj = setmetatable({sampleRate = self.sampleRate, data = {}}, Audio_mt)
+    local obj = setmetatable({sampleRate = self.sampleRate, data = {}, metadata = copy(self.metadata), info = copy(self.info)}, Audio_mt)
     for c = 1, #self.data do
         local sch, ch = self.data[c], {}
         for n = 0, count - 1 do
@@ -689,7 +771,7 @@ end
 --- Returns a reversed version of this audio.
 -- @treturn Audio The reversed audio
 function Audio:reverse()
-    local obj = setmetatable({sampleRate = self.sampleRate, data = {}}, Audio_mt)
+    local obj = setmetatable({sampleRate = self.sampleRate, data = {}, metadata = copy(self.metadata), info = copy(self.info)}, Audio_mt)
     for c = 1, #self.data do
         local sch, ch = self.data[c], {}
         local len = #sch
@@ -853,7 +935,7 @@ function aukit.pcm(data, bitDepth, dataType, channels, sampleRate, interleaved, 
     local csize = jit and 7680 or 32768
     local format = (bigEndian and ">" or "<") .. (dataType == "float" and "f" or ((dataType == "signed" and "i" or "I") .. byteDepth)):rep(csize)
     local maxValue = 2^(bitDepth-1)
-    local obj = setmetatable({sampleRate = sampleRate, data = {}}, Audio_mt)
+    local obj = setmetatable({sampleRate = sampleRate, data = {}, metadata = {}, info = {bitDepth = bitDepth, dataType = dataType}}, Audio_mt)
     for i = 1, channels do obj.data[i] = {} end
     local pos, spos = 1, 1
     local tmp = {}
@@ -1021,7 +1103,7 @@ function aukit.adpcm(data, channels, sampleRate, topFirst, interleaved, predicto
         end
         len = #data / channels
     end
-    local obj = setmetatable({sampleRate = sampleRate, data = {}}, Audio_mt)
+    local obj = setmetatable({sampleRate = sampleRate, data = {}, metadata = {}, info = {bitDepth = 16, dataType = "signed"}}, Audio_mt)
     local step = {}
     local start = os.epoch "utc"
     if interleaved then
@@ -1066,7 +1148,6 @@ function aukit.dfpwm(data, channels, sampleRate)
     sampleRate = expect(3, sampleRate, "number", "nil") or 48000
     expect.range(channels, 1)
     expect.range(sampleRate, 1)
-    if #data % channels ~= 0 then error("bad argument #1 (uneven amount of data per channel)", 2) end
     local audio = {}
     local decoder = dfpwm.make_decoder()
     local pos = 1
@@ -1097,10 +1178,10 @@ function aukit.wav(data)
     pos = pos + 4
     temp, pos = ("c4"):unpack(data, pos)
     if temp ~= "WAVE" then error("bad argument #1 (not a WAV file)", 2) end
+    local meta = {}
     while pos <= #data do
         local size
-        temp, pos = ("c4"):unpack(data, pos)
-        size, pos = ("<I"):unpack(data, pos)
+        temp, size, pos = ("<c4I"):unpack(data, pos)
         if temp == "fmt " then
             local chunk = data:sub(pos, pos + size - 1)
             pos = pos + size
@@ -1126,12 +1207,27 @@ function aukit.wav(data)
         elseif temp == "data" then
             local data = data:sub(pos, pos + size - 1)
             if #data < size then error("invalid WAV file", 2) end
+            local obj
             if dataType == "adpcm" then error("unsupported WAV file", 2) -- TODO
-            elseif dataType == "dfpwm" then return aukit.dfpwm(data, channels, sampleRate)
-            else return aukit.pcm(data, bitDepth, dataType, channels, sampleRate, true, false) end
+            elseif dataType == "dfpwm" then obj = aukit.dfpwm(data, channels, sampleRate)
+            else obj = aukit.pcm(data, bitDepth, dataType, channels, sampleRate, true, false) end
+            obj.metadata = meta
+            obj.info = {dataType = dataType, bitDepth = bitDepth}
+            return obj
         elseif temp == "fact" then
             -- TODO
             pos = pos + size
+        elseif temp == "LIST" then
+            local type = ("c4"):unpack(data, pos)
+            if type == "INFO" then
+                local e = pos + size
+                pos = pos + 4
+                while pos < e do
+                    local str
+                    type, str, pos = ("!2<c4s4Xh"):unpack(data, pos)
+                    if wavMetadata[type] then meta[wavMetadata[type]] = tonumber(str) or str end
+                end
+            else pos = pos + size end
         else pos = pos + size end
     end
     error("invalid WAV file", 2)
@@ -1148,10 +1244,10 @@ function aukit.aiff(data)
     pos = pos + 4
     temp, pos = ("c4"):unpack(data, pos)
     if temp ~= "AIFF" then error("bad argument #1 (not an AIFF file)", 2) end
+    local meta = {}
     while pos <= #data do
         local size
-        temp, pos = ("c4"):unpack(data, pos)
-        size, pos = (">I"):unpack(data, pos)
+        temp, size, pos = (">c4I"):unpack(data, pos)
         if temp == "COMM" then
             local e, m
             channels, length, bitDepth, e, m, pos = (">hIhHI7x"):unpack(data, pos)
@@ -1163,7 +1259,21 @@ function aukit.aiff(data)
             offset, _, pos = (">II"):unpack(data, pos)
             local data = data:sub(pos + offset, pos + offset + length - 1)
             if #data < length then error("invalid AIFF file", 2) end
-            return aukit.pcm(data, bitDepth, "signed", channels, sampleRate, true, true)
+            local obj = aukit.pcm(data, bitDepth, "signed", channels, sampleRate, true, true)
+            obj.metadata = meta
+            return obj
+        elseif temp == "NAME" then
+            meta.title = data:sub(pos, pos + size - 1)
+            pos = pos + size
+        elseif temp == "AUTH" then
+            meta.artist = data:sub(pos, pos + size - 1)
+            pos = pos + size
+        elseif temp == "(c) " then
+            meta.copyright = data:sub(pos, pos + size - 1)
+            pos = pos + size
+        elseif temp == "ANNO" then
+            meta.comment = data:sub(pos, pos + size - 1)
+            pos = pos + size
         else pos = pos + size end
     end
     error("invalid AIFF file", 2)
@@ -1203,7 +1313,7 @@ function aukit.new(duration, channels, sampleRate)
     sampleRate = expect(3, sampleRate, "number", "nil") or 48000
     expect.range(channels, 1)
     expect.range(sampleRate, 1)
-    local obj = setmetatable({sampleRate = sampleRate, data = {}}, Audio_mt)
+    local obj = setmetatable({sampleRate = sampleRate, data = {}, metadata = {}, info = {}}, Audio_mt)
     for c = 1, channels do
         local l = {}
         for i = 1, duration * sampleRate do l[i] = 0 end
@@ -1235,7 +1345,7 @@ function aukit.tone(frequency, duration, amplitude, waveType, duty, channels, sa
     expect.range(duty, 0, 1)
     expect.range(channels, 1)
     expect.range(sampleRate, 1)
-    local obj = setmetatable({sampleRate = sampleRate, data = {}}, Audio_mt)
+    local obj = setmetatable({sampleRate = sampleRate, data = {}, metadata = {}, info = {}}, Audio_mt)
     for c = 1, channels do
         local l = {}
         for i = 1, duration * sampleRate do l[i] = f(i / sampleRate, frequency, amplitude, duty) end
@@ -1258,7 +1368,7 @@ function aukit.noise(duration, amplitude, channels, sampleRate)
     expect.range(amplitude, 0, 1)
     expect.range(channels, 1)
     expect.range(sampleRate, 1)
-    local obj = setmetatable({sampleRate = sampleRate, data = {}}, Audio_mt)
+    local obj = setmetatable({sampleRate = sampleRate, data = {}, metadata = {}, info = {}}, Audio_mt)
     for c = 1, channels do
         local l = {}
         for i = 1, duration * sampleRate do l[i] = (math.random() * 2 - 1) * amplitude end
@@ -1383,6 +1493,63 @@ function aukit.play(callback, progress, volume, ...)
         ok, bf = coroutine.resume(b, os.pullEvent())
         if not ok then error(bf, 2) end
     end
+end
+
+local datafmts = {
+    {"bbbbbbbb", 8, "signed"},
+    {"BBBBBBBB", 8, "unsigned"},
+    {"hhhhhhhh", 16, "signed"},
+    {"iiiiiiii", 32, "signed"},
+    {"ffffffff", 32, "float"},
+    {"i3i3i3i3i3i3i3i3", 24, "signed"},
+    {"IIIIIIII", 32, "unsigned"},
+    {"I3I3I3I3I3I3I3I3", 24, "unsigned"},
+    {"HHHHHHHH", 16, "unsigned"},
+}
+
+--- Detect the type of audio file from the specified data. This uses heuristic
+-- detection methods to attempt to find the correct data type for files without
+-- headers. It is not recommended to rely on the data type/bit depth reported
+-- for PCM files - they are merely a suggestion.
+-- @tparam string data The audio file to check
+-- @treturn "pcm"|"dfpwm"|"wav"|"aiff"|"au"|"flac"|nil The type of audio file detected, or `nil` if none could be found
+-- @treturn number|nil The bit depth for PCM data, if the type is "pcm" and the bit depth can be detected
+-- @treturn "signed"|"unsigned"|"float"|nil The data type for PCM data, if the type is "pcm" and the type can be detected
+function aukit.detect(data)
+    expect(1, data, "string")
+    if data:match "^RIFF....WAVE" then return "wav"
+    elseif data:match "^FORM....AIFF" then return "aiff"
+    elseif data:match "^%.snd" then return "au"
+    elseif data:match "^fLaC" then return "flac"
+    else
+        -- Detect data type otherwise
+        -- This expects the start or end of the audio to be (near) silence
+        for _, bits in pairs(datafmts) do
+            local mid, gap = bits[3] == "unsigned" and 2^(bits[2]-1) or 0, bits[3] == "float" and 0.001 or 8 * 2^(bits[2]-8)
+            local nums = {pcall(string.unpack, bits[1], data)}
+            nums[#nums] = nil
+            if table.remove(nums, 1) then
+                local allzero, ok = true, true
+                for _, v in ipairs(nums) do
+                    if v ~= mid then allzero = false end
+                    if v < mid - gap or v > mid + gap then ok = false break end
+                end
+                if ok and not allzero then return "pcm", table.unpack(bits, 2) end
+            end
+            nums = {pcall(string.unpack, bits[1], data, #data - bits[2])}
+            nums[#nums] = nil
+            if table.remove(nums, 1) then
+                local allzero, ok = true, true
+                for _, v in ipairs(nums) do
+                    if v ~= mid then allzero = false end
+                    if v < mid - gap or v > mid + gap then ok = false break end
+                end
+                if ok and not allzero then return "pcm", table.unpack(bits, 2) end
+            end
+        end
+        if data:match(("\x55"):rep(12)) or data:match(("\xAA"):rep(12)) then return "dfpwm" end
+    end
+    return nil
 end
 
 --- aukit.stream
