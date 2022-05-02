@@ -22,6 +22,7 @@ The following options are supported in the parameter list:
 - `type` [all]: Type of file to load (`pcm`, `dfpwm`, `wav`, `aiff`, `au`, `flac`)
 - `volume` [all]: Playback volume from 0.0 to 3.0 (default 1.0)
 - `mono` [all]: Whether to mix audio down to mono (`true`, `false`) (default false)
+- `interpolation` [all]: Interpolation mode to use when resampling (`none`, `linear`, `cubic`)
 - `sampleRate` [pcm, dfpwm]: Sample rate of the audio (default 48000 Hz)
 - `channels` [pcm, dfpwm]: Number of channels in the file (default 1)
 - `bitDepth` [pcm]: Bit depth of each sample (8, 16, 24, 32) (default 8)
