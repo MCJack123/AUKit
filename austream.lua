@@ -2,7 +2,7 @@ local aukit = require "aukit"
 
 local speakers = {peripheral.find("speaker")}
 if #speakers == 0 then error("No speaker attached") end
-local mono = #speakers == 1
+local mono = v.mono or #speakers == 1
 if #speakers == 2 and peripheral.getName(speakers[1]) == "right" and peripheral.getName(speakers[2]) == "left" then speakers = {speakers[2], speakers[1]} end
 
 local path = ...
