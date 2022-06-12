@@ -4,7 +4,10 @@ AUKit: Audio decoding and processing framework for ComputerCraft
 ## Usage
 Download `aukit.lua` to your computer. You can also grab `austream` and `auplay` if you'd like. Then simply use `local aukit = require "aukit"` to load the library in a program.
 
-Both `austream` and `auplay` take a path as an argument. `austream` additionally supports HTTP(S), WS(S), and Rednet URLs. The difference between the two programs is that `auplay` preloads files, always plays in mono, and normalizes the audio. `austream` does all processing while playing, and supports multiple speakers, but does no processing outside of resampling (and mixing to mono if there's multiple audio channels but only one speaker). `austream` also accepts parameters for the file in a second argument using a table-like format (quotes are optional for strings): `austream file.bin type=pcm,sampleRate=44100,bitDepth=16,dataType=signed,channels=2,bigEndian=false`
+For information about the API, see [the Lua docs](https://mcjack123.github.io/AUKit/).
+
+### `austream`/`auplay`
+Both `austream` and `auplay` take a path as an argument. `austream` additionally supports HTTP(S), WS(S), and Rednet URLs. The difference between the two programs is that `auplay` preloads files, always plays in mono, and normalizes the audio. `austream` does all processing while playing, and supports multiple speakers, but does no processing outside of resampling (and mixing to mono if there's multiple audio channels but only one speaker).
 
 Both programs require the argument to end with the correct file extension - this is used to detect the file type. The file type can also be forced by adding `type=<extension>` to the parameter list. If using WebSocket or Rednet URLs, add a path with a (fake) file name which has the required file extension. Rednet does not require a path, but if none is given then 8-bit signed PCM at 48kHz is assumed. Files with the extension `.pcm` or `.raw` are taken as raw PCM data. Unspecified arguments to PCM data use the defaults [listed by `aukit.stream.pcm`](https://mcjack123.github.io/AUKit/#aukit.stream.pcm).
 
@@ -12,7 +15,19 @@ Both programs require the argument to end with the correct file extension - this
 
 To avoid overflowing the CC event queue, it is recommended that a delay is added to senders.
 
-For information about the API, see [the Lua docs](https://mcjack123.github.io/AUKit/).
+#### Parameter list
+`austream` also accepts parameters for the file in a second argument using a table-like format (quotes are optional for strings): `austream file.bin type=pcm,sampleRate=44100,bitDepth=16,dataType=signed,channels=2,bigEndian=false`
+
+The following options are supported in the parameter list:
+- `type` [all]: Type of file to load (`pcm`, `dfpwm`, `wav`, `aiff`, `au`, `flac`)
+- `volume` [all]: Playback volume from 0.0 to 3.0 (default 1.0)
+- `mono` [all]: Whether to mix audio down to mono (`true`, `false`) (default false)
+- `interpolation` [all]: Interpolation mode to use when resampling (`none`, `linear`, `cubic`)
+- `sampleRate` [pcm, dfpwm]: Sample rate of the audio (default 48000 Hz)
+- `channels` [pcm, dfpwm]: Number of channels in the file (default 1)
+- `bitDepth` [pcm]: Bit depth of each sample (8, 16, 24, 32) (default 8)
+- `dataType` [pcm]: Type of data of each sample (`signed`, `unsigned`, `float`) (default signed)
+- `bigEndian` [pcm]: Whether integers are in big endian form (`true`, `false`) (default false)
 
 ### `auconvert`
 `auconvert` is a program similar to FFmpeg that allows you to convert and modify audio files using AUKit. It is currently in beta, and has not been thoroughly tested; however, it appears to work.
