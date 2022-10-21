@@ -82,7 +82,7 @@ local aukit = {}
 aukit.effects, aukit.stream = {}, {}
 
 --- @tfield string _VERSION The version of AUKit that is loaded. This follows [SemVer](https://semver.org) format.
-aukit._VERSION = "1.3.1"
+aukit._VERSION = "1.3.2"
 
 --- @tfield "none"|"linear"|"cubic" defaultInterpolation Default interpolation mode for @{Audio:resample} and other functions that need to resample.
 aukit.defaultInterpolation = "linear"
@@ -2001,7 +2001,8 @@ function aukit.stream.flac(data, mono)
         return table_unpack(res, 1, res.n)
     end
     local coro = coroutine.create(decodeFLAC)
-    local _, sampleRate, len = saferesume(coro, data, coroutine.yield)
+    local ok, sampleRate, len = saferesume(coro, data, coroutine.yield)
+    if not ok then error(sampleRate, 2) end
     local pos = 0
     return function()
         if coroutine.status(coro) == "dead" then return nil end
