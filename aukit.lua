@@ -2019,7 +2019,7 @@ function aukit.stream.flac(data, mono)
             end
             sleep(0)
         end
-        local audio = setmetatable({sampleRate = sampleRate, data = chunk}, Audio_mt)
+        local audio = setmetatable({sampleRate = sampleRate, data = chunk, metadata = {}, info = {}}, Audio_mt)
         if mono and #chunk > 1 then audio = audio:mono() end
         sleep(0)
         audio = audio:resample(48000)
