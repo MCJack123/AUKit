@@ -187,10 +187,10 @@ local wavMetadata = {
     ILNG = "language"
 }
 
-local function utf8decode(str)
+local function utf8decode(str, pos)
     local codes = {utf8.codepoint(str, 1, -1)}
     for i, v in ipairs(codes) do if v > 0xFF then codes[i] = 0x3F end end
-    return string.char(table_unpack(codes))
+    return string.char(table_unpack(codes)), pos
 end
 
 local function clamp(n, min, max) return math.max(math.min(n, max), min) end
