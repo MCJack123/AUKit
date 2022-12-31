@@ -4,6 +4,13 @@ AUKit: Audio decoding and processing framework for ComputerCraft
 ## Usage
 Download `aukit.lua` to your computer. You can also grab `austream` and `auplay` if you'd like. Then simply use `local aukit = require "aukit"` to load the library in a program.
 
+Basic audio playback can be achieved in only two lines:
+
+```lua
+local aukit = require "aukit"
+aukit.play(aukit.stream.wav(io.lines("file.wav", 48000)), peripheral.find("speaker"))
+```
+
 For information about the API, see [the Lua docs](https://mcjack123.github.io/AUKit/).
 
 ### `austream`/`auplay`
