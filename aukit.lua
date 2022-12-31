@@ -82,7 +82,7 @@ local aukit = {}
 aukit.effects, aukit.stream = {}, {}
 
 --- @tfield string _VERSION The version of AUKit that is loaded. This follows [SemVer](https://semver.org) format.
-aukit._VERSION = "1.3.2"
+aukit._VERSION = "1.4.0"
 
 --- @tfield "none"|"linear"|"cubic" defaultInterpolation Default interpolation mode for @{Audio:resample} and other functions that need to resample.
 aukit.defaultInterpolation = "linear"
@@ -2184,6 +2184,88 @@ function aukit.effects.trim(audio, threshold)
     end
     local new = audio:sub(s / audio.sampleRate, e / audio.sampleRate)
     audio.data = new.data
+    return audio
+end
+
+--- Adds a delay to the specified audio.
+-- @tparam Audio audio The audio to modify
+-- @tparam number delay The amount of time to delay for, in seconds
+-- @tparam[opt=0.5] number multiplier The multiplier to apply to the delayed audio
+-- @treturn Audio The audio modified
+function aukit.effects.delay(audio, delay, multiplier)
+    expectAudio(1, audio)
+    expect(2, delay, "number")
+    multiplier = expect(3, multiplier, "number", "nil") or 0.5
+    local samples = math.floor(delay * audio.sampleRate)
+    for c = 1, #audio.data do
+        local original = {}
+        local o = audio.data[c]
+        for i = 1, #o do original[i] = o[i] end
+        for i = samples + 1, #o do o[i] = clamp(o[i] + original[i - samples] * multiplier, -1, 1) end
+    end
+    return audio
+end
+
+--- Adds an echo to the specified audio.
+-- @tparam Audio audio The audio to modify
+-- @tparam[opt=1] number delay The amount of time to echo after, in seconds
+-- @tparam[opt=0.5] number multiplier The decay multiplier to apply to the echoed audio
+-- @treturn Audio The audio modified
+function aukit.effects.echo(audio, delay, multiplier)
+    expectAudio(1, audio)
+    delay = expect(2, delay, "number", "nil") or 1
+    multiplier = expect(3, multiplier, "number", "nil") or 0.5
+    local samples = math.floor(delay * audio.sampleRate)
+    for c = 1, #audio.data do
+        local o = audio.data[c]
+        for i = samples + 1, #o do o[i] = clamp(o[i] + o[i - samples] * multiplier, -1, 1) end
+    end
+    return audio
+end
+
+local combDelayShift = {0, -11.73, 19.31, -7.97}
+local combDecayShift = {0, 0.1313, 0.2743, 0.31}
+
+--- Adds reverb to the specified audio.
+-- @tparam Audio audio The audio to modify
+-- @tparam[opt=100] number delay The amount of time to reverb after, in **milliseconds**
+-- @tparam[opt=0.3] number decay The decay factor to use
+-- @tparam[opt=1] number wetMultiplier The wet (reverbed) mix amount
+-- @tparam[opt=0] number dryMultiplier The dry (original) mix amount
+-- @treturn Audio The audio modified
+function aukit.effects.reverb(audio, delay, decay, wetMultiplier, dryMultiplier)
+    expectAudio(1, audio)
+    delay = expect(2, delay, "number", "nil") or 100
+    decay = expect(3, decay, "number", "nil") or 0.3
+    wetMultiplier = expect(4, wetMultiplier, "number", "nil") or 1
+    dryMultiplier = expect(5, dryMultiplier, "number", "nil") or 0
+    for c = 1, #audio.data do
+        -- four comb filters
+        local sum = {}
+        local o = audio.data[c]
+        for n = 1, 4 do
+            local comb = {}
+            local samples = math.floor((delay + combDelayShift[n]) / 1000 * audio.sampleRate)
+            local multiplier = decay - combDecayShift[n]
+            for i = 1, math.min(samples, #o) do
+                comb[i] = o[i]
+                sum[i] = (sum[i] or 0) + o[i]
+            end
+            for i = samples + 1, #o do
+                local s = o[i] + comb[i - samples] * multiplier
+                comb[i] = s
+                sum[i] = (sum[i] or 0) + s
+            end
+        end
+        -- mix wet/dry
+        for i = 1, #sum do sum[i] = sum[i] * wetMultiplier + o[i] * dryMultiplier end
+        -- two all pass filters
+        local samples = math.floor(0.08927 * audio.sampleRate)
+        sum[samples+1] = sum[samples+1] - 0.131 * sum[1]
+        for i = samples + 2, #sum do sum[i] = sum[i] - 0.131 * sum[i - samples] + 0.131 * sum[i + 20 - samples] end
+        o[samples+1] = clamp(sum[samples+1] - 0.131 * sum[1], -1, 1)
+        for i = samples + 2, #sum do o[i] = clamp(sum[i] - 0.131 * sum[i - samples] + 0.131 * sum[i + 20 - samples], -1, 1) end
+    end
     return audio
 end
 
