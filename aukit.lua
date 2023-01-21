@@ -82,7 +82,7 @@ local aukit = {}
 aukit.effects, aukit.stream = {}, {}
 
 --- @tfield string _VERSION The version of AUKit that is loaded. This follows [SemVer](https://semver.org) format.
-aukit._VERSION = "1.4.0"
+aukit._VERSION = "1.4.1"
 
 --- @tfield "none"|"linear"|"cubic" defaultInterpolation Default interpolation mode for @{Audio:resample} and other functions that need to resample.
 aukit.defaultInterpolation = "linear"
@@ -1431,6 +1431,7 @@ function aukit.play(callback, progress, volume, ...)
         table.insert(speakers, 1, progress)
         progress = nil
     end
+    if #speakers == 0 then error("bad argument #2 (expected speakers, got nil)", 2) end
     local chunks = {}
     local complete = false
     local a, b = coroutine.create(function()
