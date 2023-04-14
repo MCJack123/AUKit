@@ -82,7 +82,7 @@ local aukit = {}
 aukit.effects, aukit.stream = {}, {}
 
 --- @tfield string _VERSION The version of AUKit that is loaded. This follows [SemVer](https://semver.org) format.
-aukit._VERSION = "1.4.1"
+aukit._VERSION = "1.4.2"
 
 --- @tfield "none"|"linear"|"cubic" defaultInterpolation Default interpolation mode for @{Audio:resample} and other functions that need to resample.
 aukit.defaultInterpolation = "linear"
@@ -208,8 +208,8 @@ end
 
 local function intunpack(str, pos, sz, signed, be)
     local n = 0
-    if be then for i = 0, sz - 1 do n = n * 256 + str_byte(str, pos+i) end
-    else for i = 0, sz - 1 do n = n + str_byte(str, pos+i) * 2^(8*i) end end
+    if be then for i = 0, sz - 1 do n = n * 256 + str:byte(pos+i) end
+    else for i = 0, sz - 1 do n = n + str:byte(pos+i) * 2^(8*i) end end
     if signed and n >= 2^(sz*8-1) then n = n - 2^(sz*8) end
     return n, pos + sz
 end
@@ -244,6 +244,16 @@ local wavegen = {
         return amplitude * math_fmod(2.0 * x * freq + 1.0, 2.0) - amplitude
     end
 }
+
+--[[
+.########.##..........###.....######.
+.##.......##.........##.##...##....##
+.##.......##........##...##..##......
+.######...##.......##.....##.##......
+.##.......##.......#########.##......
+.##.......##.......##.....##.##....##
+.##.......########.##.....##..######.
+]]
 
 local decodeFLAC do
 
@@ -553,6 +563,16 @@ local decodeFLAC do
     end
 
 end
+
+--[[
+....###....##.....##.########..####..#######.
+...##.##...##.....##.##.....##..##..##.....##
+..##...##..##.....##.##.....##..##..##.....##
+.##.....##.##.....##.##.....##..##..##.....##
+.#########.##.....##.##.....##..##..##.....##
+.##.....##.##.....##.##.....##..##..##.....##
+.##.....##..#######..########..####..#######.
+]]
 
 --- Returns the length of the audio object in seconds.
 -- @treturn number The audio length
@@ -905,6 +925,16 @@ Audio_mt = {__index = Audio, __add = Audio.combine, __mul = Audio.rep, __concat 
 function Audio_mt:__tostring()
     return "Audio: " .. self.sampleRate .. " Hz, " .. #self.data .. " channels, " .. (#self.data[1] / self.sampleRate) .. " seconds"
 end
+
+--[[
+....###....##.....##.##....##.####.########
+...##.##...##.....##.##...##...##.....##...
+..##...##..##.....##.##..##....##.....##...
+.##.....##.##.....##.#####.....##.....##...
+.#########.##.....##.##..##....##.....##...
+.##.....##.##.....##.##...##...##.....##...
+.##.....##..#######..##....##.####....##...
+]]
 
 --- aukit
 -- @section aukit
@@ -1561,6 +1591,16 @@ function aukit.detect(data)
     return nil
 end
 
+--[[
+..######..########.########..########....###....##.....##
+.##....##....##....##.....##.##.........##.##...###...###
+.##..........##....##.....##.##........##...##..####.####
+..######.....##....########..######...##.....##.##.###.##
+.......##....##....##...##...##.......#########.##.....##
+.##....##....##....##....##..##.......##.....##.##.....##
+..######.....##....##.....##.########.##.....##.##.....##
+]]
+
 --- aukit.stream
 -- @section aukit.stream
 
@@ -1826,11 +1866,13 @@ end
 -- @tparam string|function():string data The WAV file to decode, or a function
 -- returning chunks to decode (the first chunk MUST contain the ENTIRE header)
 -- @tparam[opt=false] boolean mono Whether to mix the audio to mono
+-- @tparam[opt=false] boolean ignoreHeader Whether to ignore additional headers
+-- if they appear later in the audio stream
 -- @treturn function():{{[number]...}...},number An iterator function that returns
 -- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
 -- the current position of the audio in seconds
 -- @treturn number The total length of the audio in seconds
-function aukit.stream.wav(data, mono)
+function aukit.stream.wav(data, mono, ignoreHeader)
     local fn
     if type(data) == "function" then fn, data = data, data() end
     expect(1, data, "string")
@@ -1873,6 +1915,11 @@ function aukit.stream.wav(data, mono)
                 local first, f = data
                 data = function()
                     if first then f, first = first return f
+                    elseif ignoreHeader then
+                        local d = fn()
+                        if not d then return nil end
+                        if d:match "^RIFF....WAVE" then return d:sub(d:match("^RIFF....WAVE.?data....()"))
+                        else return d end
                     else return fn() end
                 end
             end
@@ -1892,11 +1939,13 @@ end
 -- @tparam string|function():string data The AIFF file to decode, or a function
 -- returning chunks to decode (the first chunk MUST contain the ENTIRE header)
 -- @tparam[opt=false] boolean mono Whether to mix the audio to mono
+-- @tparam[opt=false] boolean ignoreHeader Whether to ignore additional headers
+-- if they appear later in the audio stream
 -- @treturn function():{{[number]...}...},number An iterator function that returns
 -- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
 -- the current position of the audio in seconds
 -- @treturn number The total length of the audio in seconds
-function aukit.stream.aiff(data, mono)
+function aukit.stream.aiff(data, mono, ignoreHeader)
     local fn
     if type(data) == "function" then fn, data = data, data() end
     expect(1, data, "string")
@@ -1926,6 +1975,14 @@ function aukit.stream.aiff(data, mono)
                 local first, f = data
                 data = function()
                     if first then f, first = first return f
+                    elseif ignoreHeader then
+                        local d = fn()
+                        if not d then return nil end
+                        if d:match "^FORM....AIFF" then
+                            local n, p = d:match("^FORM....AIFF.?SSND(....)....()")
+                            offset = (">I"):unpack(n)
+                            return d:sub(p + offset)
+                        else return d end
                     else return fn() end
                 end
             end
@@ -1940,11 +1997,13 @@ end
 -- @tparam string|function():string data The AU file to decode, or a function
 -- returning chunks to decode (the first chunk MUST contain the ENTIRE header)
 -- @tparam[opt=false] boolean mono Whether to mix the audio to mono
+-- @tparam[opt=false] boolean ignoreHeader Whether to ignore additional headers
+-- if they appear later in the audio stream
 -- @treturn function():{{[number]...}...},number An iterator function that returns
 -- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
 -- the current position of the audio in seconds
 -- @treturn number The total length of the audio in seconds
-function aukit.stream.au(data, mono)
+function aukit.stream.au(data, mono, ignoreHeader)
     local fn
     if type(data) == "function" then fn, data = data, data() end
     expect(1, data, "string")
@@ -1955,6 +2014,11 @@ function aukit.stream.au(data, mono)
         local first, f = data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), nil
         data = function()
             if first then f, first = first return f
+            elseif ignoreHeader then
+                local d = fn()
+                if not d then return nil end
+                if d:match "^.snd" then return d:sub((">I"):unpack(d:sub(5, 8)), nil)
+                else return d end
             else return fn() end
         end
     else data = data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil) end
@@ -2005,6 +2069,9 @@ function aukit.stream.flac(data, mono)
     local ok, sampleRate, len = saferesume(coro, data, coroutine.yield)
     if not ok then error(sampleRate, 2) end
     local pos = 0
+    local ratio = 48000 / sampleRate
+    local interp = interpolate[aukit.defaultInterpolation]
+    local last = {0, 0}
     return function()
         if coroutine.status(coro) == "dead" then return nil end
         local chunk = {{}}
@@ -2016,7 +2083,16 @@ function aukit.stream.flac(data, mono)
                 chunk[c] = chunk[c] or {}
                 local src, dest = res[c], chunk[c]
                 local start = #dest
-                for i = 1, #res[c] do dest[start+i] = src[i] end
+                src[0] = last[2]
+                src[-1] = last[1]
+                for i = 1, math_floor(#src * ratio) do
+                    local d = start+i
+                    local x = ((i - 1) / ratio) + 1
+                    if x % 1 == 0 then dest[d] = src[i]
+                    else dest[d] = interp(src, x) end
+                    dest[d] = clamp(dest[d] * (dest[d] < 0 and 128 or 127), -128, 127)
+                end
+                last = {src[#src-1], src[#src]}
             end
             sleep(0)
         end
@@ -2031,11 +2107,19 @@ function aukit.stream.flac(data, mono)
             for i = 1, #src do dest[i] = src[i] * (src[i] < 0 and 128 or 127) end
             chunk[c] = dest
         end
-        local p = pos
-        pos = pos + #audio.data[1] / 48000
-        return chunk, p
+        return chunk, #chunk[1] / sampleRate
     end, len / sampleRate
 end
+
+--[[
+.########.########.########.########..######..########..######.
+.##.......##.......##.......##.......##....##....##....##....##
+.##.......##.......##.......##.......##..........##....##......
+.######...######...######...######...##..........##.....######.
+.##.......##.......##.......##.......##..........##..........##
+.##.......##.......##.......##.......##....##....##....##....##
+.########.##.......##.......########..######.....##.....######.
+]]
 
 --- aukit.effects
 -- @section aukit.effects
