@@ -64,8 +64,8 @@
 <p> Once the audio is loaded, various basic operations are available. A subset of
  the string library is available to simplify operations on the audio, and a
  number of operators (+, *, .., #) are overridden as well. There's also built-
- in functions for resampling the audio, with nearest-neighbor, linear, and
- cubic interpolation available; as well as mixing channels (including down to
+ in functions for resampling the audio, with nearest-neighbor, linear, cubic,
+ and sinc interpolation available; as well as mixing channels (including down to
  mono) and combining/splitting channels. Finally, audio objects can be exported
  back to PCM, DFPWM, or WAV data, allowing changes to be easily stored on disk.
  The stream function also automatically chunks data for use with a speaker.
@@ -74,6 +74,17 @@
  in the aukit.effects table, and modify the audio passed to them (as well as
  returning the audio for streamlining). The effects are intended to speed up
  common operations on audio. More effects may be added in future versions.
+<p> For simple audio playback tasks, the aukit.stream table provides a number of
+ functions that can quickly decode audio for real-time playback. Each function
+ returns an iterator function that can be called multiple times to obtain fully
+ decoded chunks of audio in 8-bit PCM, ready for playback to one or more
+ speakers. The functions decode the data, resample it to 48 kHz (using the
+ default resampling method), apply a low-pass filter to decrease interpolation
+ error, mix to mono if desired, and then return a list of tables with samples
+ in the range [-128, 127], plus the current position of the audio. The
+ iterators can be passed directly to the aukit.play function, which complements
+ the aukit.stream suite by playing the decoded audio on speakers while decoding
+ it in real-time, handling synchronization of speakers as best as possible.
 <p> Be aware that processing large amounts of audio (especially loading FLAC or
  resampling with higher quality) is *very* slow. It's recommended to use audio
  files with lower data size (8-bit mono PCM/WAV/AIFF is ideal), and potentially
@@ -310,6 +321,14 @@
 	<td class="name" nowrap><a href="#aukit.effects.reverb">aukit.effects.reverb (audio[, delay=100[, decay=0.3[, wetMultiplier=1[, dryMultiplier=0]]]])</a></td>
 	<td class="summary">Adds reverb to the specified audio.</td>
 	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#aukit.effects.lowpass">aukit.effects.lowpass (audio, frequency)</a></td>
+	<td class="summary">Applies a low-pass filter to the specified audio.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#aukit.effects.highpass">aukit.effects.highpass (audio, frequency)</a></td>
+	<td class="summary">Applies a high-pass filter to the specified audio.</td>
+	</tr>
 </table>
 
 <br/>
@@ -349,7 +368,7 @@
 
     <ul>
         <li><span class="parameter">defaultInterpolation</span>
-            <span class="types"><span class="type">"none"</span>, <span class="type">"linear"</span> or <span class="type">"cubic"</span></span>
+            <span class="types"><span class="type">"none"</span>, <span class="type">"linear"</span>, <span class="type">"cubic"</span> or <span class="type">"sinc"</span></span>
          Default interpolation mode for <a href="index.html#Audio:resample">Audio:resample</a> and other functions that need to resample.
         </li>
     </ul>
@@ -2036,6 +2055,68 @@
 
 
 </dd>
+    <dt>
+    <a name = "aukit.effects.lowpass"></a>
+    <strong>aukit.effects.lowpass (audio, frequency)</strong>
+    </dt>
+    <dd>
+    Applies a low-pass filter to the specified audio.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">audio</span>
+            <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
+         The audio to modify
+        </li>
+        <li><span class="parameter">frequency</span>
+            <span class="types"><span class="type">number</span></span>
+         The cutoff frequency for the filter
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
+        The audio modified
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "aukit.effects.highpass"></a>
+    <strong>aukit.effects.highpass (audio, frequency)</strong>
+    </dt>
+    <dd>
+    Applies a high-pass filter to the specified audio.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">audio</span>
+            <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
+         The audio to modify
+        </li>
+        <li><span class="parameter">frequency</span>
+            <span class="types"><span class="type">number</span></span>
+         The cutoff frequency for the filter
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
+        The audio modified
+    </ol>
+
+
+
+
+</dd>
 </dl>
 
 
@@ -2043,7 +2124,7 @@
 </div> <!-- id="main" -->
 <div id="about">
 <i>generated by <a href="http://github.com/stevedonovan/LDoc">LDoc 1.4.6</a></i>
-<i style="float:right;">Last updated 2023-04-14 00:19:34 </i>
+<i style="float:right;">Last updated 2023-04-28 14:12:50 </i>
 </div> <!-- id="about" -->
 </div> <!-- id="container" -->
 </body>

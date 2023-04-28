@@ -18,8 +18,8 @@
 -- Once the audio is loaded, various basic operations are available. A subset of
 -- the string library is available to simplify operations on the audio, and a
 -- number of operators (+, *, .., #) are overridden as well. There's also built-
--- in functions for resampling the audio, with nearest-neighbor, linear, and
--- cubic interpolation available; as well as mixing channels (including down to
+-- in functions for resampling the audio, with nearest-neighbor, linear, cubic,
+-- and sinc interpolation available; as well as mixing channels (including down to
 -- mono) and combining/splitting channels. Finally, audio objects can be exported
 -- back to PCM, DFPWM, or WAV data, allowing changes to be easily stored on disk.
 -- The stream function also automatically chunks data for use with a speaker.
@@ -29,6 +29,18 @@
 -- in the aukit.effects table, and modify the audio passed to them (as well as
 -- returning the audio for streamlining). The effects are intended to speed up
 -- common operations on audio. More effects may be added in future versions.
+--
+-- For simple audio playback tasks, the aukit.stream table provides a number of
+-- functions that can quickly decode audio for real-time playback. Each function
+-- returns an iterator function that can be called multiple times to obtain fully
+-- decoded chunks of audio in 8-bit PCM, ready for playback to one or more
+-- speakers. The functions decode the data, resample it to 48 kHz (using the
+-- default resampling method), apply a low-pass filter to decrease interpolation
+-- error, mix to mono if desired, and then return a list of tables with samples
+-- in the range [-128, 127], plus the current position of the audio. The
+-- iterators can be passed directly to the aukit.play function, which complements
+-- the aukit.stream suite by playing the decoded audio on speakers while decoding
+-- it in real-time, handling synchronization of speakers as best as possible.
 --
 -- Be aware that processing large amounts of audio (especially loading FLAC or
 -- resampling with higher quality) is *very* slow. It's recommended to use audio
@@ -73,7 +85,7 @@ local expect = require "cc.expect"
 local dfpwm = require "cc.audio.dfpwm"
 
 local bit32_band, bit32_rshift, bit32_btest = bit32.band, bit32.rshift, bit32.btest
-local math_floor, math_ceil, math_sin, math_abs, math_fmod = math.floor, math.ceil, math.sin, math.abs, math.fmod
+local math_floor, math_ceil, math_sin, math_abs, math_fmod, math_min, math_pi = math.floor, math.ceil, math.sin, math.abs, math.fmod, math.min, math.pi
 local os_epoch = os.epoch
 local str_pack, str_unpack, str_sub, str_byte, str_rep = string.pack, string.unpack, string.sub, string.byte, string.rep
 local table_unpack = table.unpack
@@ -82,9 +94,9 @@ local aukit = {}
 aukit.effects, aukit.stream = {}, {}
 
 --- @tfield string _VERSION The version of AUKit that is loaded. This follows [SemVer](https://semver.org) format.
-aukit._VERSION = "1.4.2"
+aukit._VERSION = "1.5.0"
 
---- @tfield "none"|"linear"|"cubic" defaultInterpolation Default interpolation mode for @{Audio:resample} and other functions that need to resample.
+--- @tfield "none"|"linear"|"cubic"|"sinc" defaultInterpolation Default interpolation mode for @{Audio:resample} and other functions that need to resample.
 aukit.defaultInterpolation = "linear"
 
 --- @type Audio
@@ -103,6 +115,8 @@ Audio.info = nil
 local dfpwmUUID = "3ac1fa38-811d-4361-a40d-ce53ca607cd1" -- UUID for DFPWM in WAV files
 
 local function uuidBytes(uuid) return uuid:gsub("-", ""):gsub("%x%x", function(c) return string.char(tonumber(c, 16)) end) end
+
+local sincWindowSize = jit and 30 or 10
 
 local wavExtensible = {
     dfpwm = uuidBytes(dfpwmUUID),
@@ -219,20 +233,37 @@ local interpolate = {
         return data[math_floor(x)]
     end,
     linear = function(data, x)
-        return data[math_floor(x)] + ((data[math_ceil(x)] or data[math_floor(x)]) - data[math_floor(x)]) * (x - math_floor(x))
+        local ffx = math_floor(x)
+        return data[ffx] + ((data[ffx+1] or data[ffx]) - data[ffx]) * (x - ffx)
     end,
     cubic = function(data, x)
-        local p0, p1, p2, p3, fx = data[math_floor(x)-1], data[math_floor(x)], data[math_ceil(x)], data[math_ceil(x)+1], x - math_floor(x)
+        local ffx = math_floor(x)
+        local p0, p1, p2, p3, fx = data[ffx-1], data[ffx], data[ffx+1], data[ffx+2], x - ffx
         p0, p2, p3 = p0 or p1, p2 or p1, p3 or p2 or p1
         return (-0.5*p0 + 1.5*p1 - 1.5*p2 + 0.5*p3)*fx^3 + (p0 - 2.5*p1 + 2*p2 - 0.5*p3)*fx^2 + (-0.5*p0 + 0.5*p2)*fx + p1
+    end,
+    sinc = function(data, x)
+        local ffx = math_floor(x)
+        local fx = x - ffx
+        local sum = 0
+        for n = -sincWindowSize, sincWindowSize do
+            local idx = ffx+n
+            local d = data[idx]
+            if d then
+                local px = math_pi * (fx - n)
+                if px == 0 then sum = sum + d
+                else sum = sum + d * math_sin(px) / px end
+            end
+        end
+        return sum
     end
 }
-local interpolation_start = {none = 1, linear = 1, cubic = 0}
-local interpolation_end = {none = 1, linear = 2, cubic = 3}
+local interpolation_start = {none = 1, linear = 1, cubic = 0, sinc = 0}
+local interpolation_end = {none = 1, linear = 2, cubic = 3, sinc = 0}
 
 local wavegen = {
     sine = function(x, freq, amplitude)
-        return math_sin(2 * x * math.pi * freq) * amplitude
+        return math_sin(2 * x * math_pi * freq) * amplitude
     end,
     triangle = function(x, freq, amplitude)
         return 2.0 * math_abs(amplitude * math_fmod(2.0 * x * freq + 1.5, 2.0) - amplitude) - amplitude
@@ -594,7 +625,7 @@ end
 function Audio:resample(sampleRate, interpolation)
     expect(1, sampleRate, "number")
     interpolation = expect(2, interpolation, "string", "nil") or aukit.defaultInterpolation
-    if interpolation ~= "none" and interpolation ~= "linear" and interpolation ~= "cubic" then error("bad argument #2 (invalid interpolation type)", 2) end
+    if not interpolate[interpolation] then error("bad argument #2 (invalid interpolation type)", 2) end
     local new = setmetatable({sampleRate = sampleRate, data = {}, metadata = copy(self.metadata), info = copy(self.info)}, Audio_mt)
     local ratio = sampleRate / self.sampleRate
     local newlen = #self.data[1] * ratio
@@ -1759,6 +1790,7 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
     end
     local d = {}
     local ratio = 48000 / sampleRate
+    local lp_alpha = 1 - math.exp(-(sampleRate / 96000) * 2 * math_pi)
     local interp = interpolate[aukit.defaultInterpolation]
     for j = 1, (mono and 1 or channels) do d[j] = setmetatable({}, {__index = function(self, i)
         if mono then for _ = 1, channels do self[i] = (rawget(self, i) or 0) + read() end self[i] = self[i] / channels
@@ -1783,21 +1815,37 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
         local chunk = {}
         for j = 1, #d do chunk[j] = {} end
         ok = pcall(function()
+            local ls = {}
+            for y = 1, #d do
+                local s = chunk[y][0] or 0
+                ls[y] = s / (s < 0 and 128 or 127)
+            end
             for i = 1, 48000 do
                 for y = 1, #d do
                     local x = ((i - 1) / ratio) + 1
-                    if x % 1 == 0 then chunk[y][i] = d[y][x]
-                    else chunk[y][i] = interp(d[y], x) end
-                    chunk[y][i] = clamp(chunk[y][i] * (chunk[y][i] < 0 and 128 or 127), -128, 127)
+                    local s
+                    if x % 1 == 0 then s = d[y][x]
+                    else s = interp(d[y], x) end
+                    local ns = ls[y] + lp_alpha * (s - ls[y])
+                    chunk[y][i] = clamp(ns * (ns < 0 and 128 or 127), -128, 127)
+                    ls[y] = s
                 end
             end
         end)
         if #chunk[1] == 0 then return nil end
         n = n + #chunk[1]
         for y = 1, #d do
-            local l2, l1 = d[y][#d[y]-1], d[y][#d[y]]
-            d[y] = setmetatable({}, getmetatable(d[y]))
-            d[y][-1], d[y][0] = l2, l1
+            if aukit.defaultInterpolation == "sinc" then
+                local t, l = {}, #d[y]
+                for i = -sincWindowSize, 0 do
+                    t[i] = d[y][l + i]
+                end
+                d[y] = setmetatable(t, getmetatable(d[y]))
+            else
+                local l2, l1 = d[y][#d[y]-1], d[y][#d[y]]
+                d[y] = setmetatable({}, getmetatable(d[y]))
+                d[y][-1], d[y][0] = l2, l1
+            end
         end
         return chunk, (n - #chunk[1]) / 48000
     end, len / sampleRate
@@ -2070,6 +2118,7 @@ function aukit.stream.flac(data, mono)
     if not ok then error(sampleRate, 2) end
     local pos = 0
     local ratio = 48000 / sampleRate
+    local lp_alpha = 1 - math.exp(-(sampleRate / 96000) * 2 * math_pi)
     local interp = interpolate[aukit.defaultInterpolation]
     local last = {0, 0}
     return function()
@@ -2085,29 +2134,23 @@ function aukit.stream.flac(data, mono)
                 local start = #dest
                 src[0] = last[2]
                 src[-1] = last[1]
+                local ls = last[2] / (last[2] < 0 and 128 or 127)
                 for i = 1, math_floor(#src * ratio) do
                     local d = start+i
                     local x = ((i - 1) / ratio) + 1
-                    if x % 1 == 0 then dest[d] = src[i]
-                    else dest[d] = interp(src, x) end
-                    dest[d] = clamp(dest[d] * (dest[d] < 0 and 128 or 127), -128, 127)
+                    local s
+                    if x % 1 == 0 then s = src[x]
+                    else s = interp(src, x) end
+                    s = ls + lp_alpha * (s - ls)
+                    ls = s
+                    dest[d] = clamp(s * (s < 0 and 128 or 127), -128, 127)
                 end
                 last = {src[#src-1], src[#src]}
             end
             sleep(0)
         end
-        local audio = setmetatable({sampleRate = sampleRate, data = chunk, metadata = {}, info = {}}, Audio_mt)
-        if mono and #chunk > 1 then audio = audio:mono() end
-        sleep(0)
-        audio = audio:resample(48000)
-        sleep(0)
-        chunk = {}
-        for c = 1, #audio.data do
-            local src, dest = audio.data[c], {}
-            for i = 1, #src do dest[i] = src[i] * (src[i] < 0 and 128 or 127) end
-            chunk[c] = dest
-        end
-        return chunk, #chunk[1] / sampleRate
+        pos = pos + #chunk[1] / 48000
+        return chunk, pos
     end, len / sampleRate
 end
 
@@ -2350,6 +2393,44 @@ function aukit.effects.reverb(audio, delay, decay, wetMultiplier, dryMultiplier)
         for i = samples + 2, #sum do sum[i] = sum[i] - 0.131 * sum[i - samples] + 0.131 * sum[i + 20 - samples] end
         o[samples+1] = clamp(sum[samples+1] - 0.131 * sum[1], -1, 1)
         for i = samples + 2, #sum do o[i] = clamp(sum[i] - 0.131 * sum[i - samples] + 0.131 * sum[i + 20 - samples], -1, 1) end
+    end
+    return audio
+end
+
+--- Applies a low-pass filter to the specified audio.
+-- @tparam Audio audio The audio to modify
+-- @tparam number frequency The cutoff frequency for the filter
+-- @treturn Audio The audio modified
+function aukit.effects.lowpass(audio, frequency)
+    expectAudio(1, audio)
+    expect(2, frequency, "number")
+    local a = 1 - math.exp(-(frequency / audio.sampleRate) * 2 * math_pi)
+    for c = 1, #audio.data do
+        local d = audio.data[c]
+        for i = 2, #d do
+            local l = d[i-1]
+            d[i] = l + a * (d[i] - l)
+        end
+    end
+    return audio
+end
+
+--- Applies a high-pass filter to the specified audio.
+-- @tparam Audio audio The audio to modify
+-- @tparam number frequency The cutoff frequency for the filter
+-- @treturn Audio The audio modified
+function aukit.effects.highpass(audio, frequency)
+    expectAudio(1, audio)
+    expect(2, frequency, "number")
+    local a = 1 / (2 * math_pi * (frequency / audio.sampleRate) + 1)
+    for c = 1, #audio.data do
+        local d = audio.data[c]
+        local lx = d[1]
+        for i = 2, #d do
+            local llx = d[i]
+            d[i] = a * (d[i-1] + llx - lx)
+            lx = llx
+        end
     end
     return audio
 end

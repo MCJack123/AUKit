@@ -24,7 +24,7 @@ Options:
   -e|--effect <name>[,<args...>]    Apply an effect to the last output file before writing
     For available effects, use `-e list`
   -m|--map <map command>            Map one or more input channels to an output channel
-     --interpolation <type>         Set the interpolation type for audio scaling (none, linear, cubic)
+     --interpolation <type>         Set the interpolation type for audio scaling (none, linear, cubic, sinc)
   -h|--help                         Show this help
 
 Map command format:
@@ -64,7 +64,7 @@ local argmap = {
     h = "--help"
 }
 local dataTypes = {signed = "signed", unsigned = "unsigned", float = "float"}
-local interp = {none = "none", linear = "linear", cubic = "cubic"}
+local interp = {none = "none", linear = "linear", cubic = "cubic", sinc = "sinc"}
 local ops = {['['] = 1, ['*'] = 1, ['+'] = 2, ['&'] = 3}
 local function num(n, ...) if not n then return end return tonumber(n), num(...) end
 local function seq(i, j) if i > j then return else return i, seq(i+1, j) end end
