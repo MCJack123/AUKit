@@ -42,6 +42,9 @@
 -- the aukit.stream suite by playing the decoded audio on speakers while decoding
 -- it in real-time, handling synchronization of speakers as best as possible.
 --
+-- If you're really lazy, you can also call `aukit` as a function, which takes
+-- the path to a file, and plays this on all available speakers.
+--
 -- Be aware that processing large amounts of audio (especially loading FLAC or
 -- resampling with higher quality) is *very* slow. It's recommended to use audio
 -- files with lower data size (8-bit mono PCM/WAV/AIFF is ideal), and potentially
@@ -90,11 +93,18 @@ local os_epoch = os.epoch
 local str_pack, str_unpack, str_sub, str_byte, str_rep = string.pack, string.unpack, string.sub, string.byte, string.rep
 local table_unpack = table.unpack
 
-local aukit = {}
+local aukit = setmetatable({}, {__call = function(aukit, path)
+    expect(1, path, "string")
+    local file = assert(fs.open(path, "rb"))
+    local type = aukit.detect(file.read(64)) or "dfpwm"
+    file.seek("set", 0)
+    aukit.play(aukit.stream[type](function() return file.read(48000) end), peripheral.find("speaker"))
+    file.close()
+end})
 aukit.effects, aukit.stream = {}, {}
 
 --- @tfield string _VERSION The version of AUKit that is loaded. This follows [SemVer](https://semver.org) format.
-aukit._VERSION = "1.5.0"
+aukit._VERSION = "1.5.1"
 
 --- @tfield "none"|"linear"|"cubic"|"sinc" defaultInterpolation Default interpolation mode for @{Audio:resample} and other functions that need to resample.
 aukit.defaultInterpolation = "linear"
