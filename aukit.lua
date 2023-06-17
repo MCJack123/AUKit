@@ -1553,12 +1553,18 @@ function aukit.play(callback, progress, volume, ...)
             end
         end
         if coroutine.status(b) == "suspended" and (#aq == 0 or #bq == 0) then
-            os.queueEvent("__queue_end")
-            while true do
+            if af ~= nil and bf ~= nil then
                 local event = table.pack(os.pullEvent())
-                if event[1] == "__queue_end" then break end
                 aq[#aq+1] = event
                 bq[#bq+1] = event
+            else
+                os.queueEvent("__queue_end")
+                while true do
+                    local event = table.pack(os.pullEvent())
+                    if event[1] == "__queue_end" then break end
+                    aq[#aq+1] = event
+                    bq[#bq+1] = event
+                end
             end
         end
     until coroutine.status(b) == "dead" or complete
@@ -1893,7 +1899,8 @@ function aukit.stream.dfpwm(data, sampleRate, channels, mono)
         local audio = decoder(d)
         if audio == nil or #audio == 0 then return nil end
         audio[0], last = last, audio[#audio]
-        sleep(0)
+        os.queueEvent("nosleep")
+        os.pullEvent()
         local ratio = 48000 / sampleRate
         local newlen = #audio * ratio
         local interp = interpolate[aukit.defaultInterpolation]
@@ -1911,7 +1918,8 @@ function aukit.stream.dfpwm(data, sampleRate, channels, mono)
             end
             if mono then lines[1][math_ceil(i / channels)] = n / channels end
         end
-        sleep(0)
+        os.queueEvent("nosleep")
+        os.pullEvent()
         local p = pos
         pos = pos + 6000 * channels
         return lines, p * 8 / sampleRate / channels
@@ -2137,7 +2145,8 @@ function aukit.stream.flac(data, mono)
         while #chunk[1] < sampleRate do
             local ok, res = saferesume(coro)
             if not ok or res == nil or res.sampleRate then break end
-            sleep(0)
+            os.queueEvent("nosleep")
+            os.pullEvent()
             for c = 1, #res do
                 chunk[c] = chunk[c] or {}
                 local src, dest = res[c], chunk[c]
@@ -2157,7 +2166,8 @@ function aukit.stream.flac(data, mono)
                 end
                 last = {src[#src-1], src[#src]}
             end
-            sleep(0)
+            os.queueEvent("nosleep")
+            os.pullEvent()
         end
         pos = pos + #chunk[1] / 48000
         return chunk, pos
