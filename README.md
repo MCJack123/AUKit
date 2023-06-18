@@ -1,6 +1,21 @@
 # AUKit
 AUKit: Audio decoding and processing framework for ComputerCraft
 
+## Supported audio formats
+All sample rates and channel counts are supported. Functions to convert to ComputerCraft's expected 48kHz are provided, and handled automatically while streaming.
+- Raw linear PCM, 8-, 16-, 24-, or 32-bit signed/unsigned little/big endian
+- Raw linear PCM, 32-bit floating point little/big endian
+- Raw DFPWM
+- Raw Microsoft ADPCM (no streaming)
+- Raw IMA ADPCM (no streaming)
+- WAV, PCM, 8-bit, 16-bit, 24-bit, 32-bit, or float
+- WAV, DFPWM
+- WAV, Microsoft ADPCM (no streaming)
+- WAV, IMA ADPCM (no streaming)
+- AIFF, PCM
+- AU, PCM, 8-bit, 16-bit, 24-bit, 32-bit, or float
+- FLAC, 8-bit, 16-bit, 24-bit, or 32-bit
+
 ## Usage
 Download `aukit.lua` to your computer. You can also grab `austream` and `auplay` if you'd like. Then simply use `local aukit = require "aukit"` to load the library in a program.
 

@@ -88,7 +88,7 @@ local expect = require "cc.expect"
 local dfpwm = require "cc.audio.dfpwm"
 
 local bit32_band, bit32_rshift, bit32_btest = bit32.band, bit32.rshift, bit32.btest
-local math_floor, math_ceil, math_sin, math_abs, math_fmod, math_min, math_pi = math.floor, math.ceil, math.sin, math.abs, math.fmod, math.min, math.pi
+local math_floor, math_ceil, math_sin, math_abs, math_fmod, math_min, math_max, math_pi = math.floor, math.ceil, math.sin, math.abs, math.fmod, math.min, math.max, math.pi
 local os_epoch = os.epoch
 local str_pack, str_unpack, str_sub, str_byte, str_rep = string.pack, string.unpack, string.sub, string.byte, string.rep
 local table_unpack = table.unpack
@@ -131,7 +131,8 @@ local sincWindowSize = jit and 30 or 10
 local wavExtensible = {
     dfpwm = uuidBytes(dfpwmUUID),
     pcm = uuidBytes "01000000-0000-1000-8000-00aa00389b71",
-    adpcm = uuidBytes "02000000-0000-1000-8000-00aa00389b71",
+    msadpcm = uuidBytes "02000000-0000-1000-8000-00aa00389b71",
+    adpcm = uuidBytes "11000000-0000-1000-8000-00aa00389b71",
     pcm_float = uuidBytes "03000000-0000-1000-8000-00aa00389b71"
 }
 
@@ -165,6 +166,11 @@ local ima_step_table = {
     2272, 2499, 2749, 3024, 3327, 3660, 4026, 4428, 4871, 5358,
     5894, 6484, 7132, 7845, 8630, 9493, 10442, 11487, 12635, 13899,
     15289, 16818, 18500, 20350, 22385, 24623, 27086, 29794, 32767
+}
+
+local msadpcm_adaption_table = {
+    [0] = 230, 230, 230, 230, 307, 409, 512, 614,
+    [-8] = 768, [-7] = 614, [-6] = 512, [-5] = 409, [-4] = 307, [-3] = 230, [-2] = 230, [-1] = 230
 }
 
 local flacMetadata = {
@@ -1151,10 +1157,10 @@ function aukit.adpcm(data, channels, sampleRate, topFirst, interleaved, predicto
         for i = 1, channels do step_index[i] = 0 end
     elseif type(step_index) == "number" then
         if channels ~= 1 then error("bad argument #7 (table too short)", 2) end
-        step_index = {expect.range(step_index, 0, 15)}
+        step_index = {expect.range(step_index, 0, 88)}
     else
         if channels > #step_index then error("bad argument #7 (table too short)", 2) end
-        for i = 1, channels do expect.range(step_index[i], 0, 15) end
+        for i = 1, channels do expect.range(step_index[i], 0, 88) end
     end
     local pos = 1
     local read, tmp, len
@@ -1186,14 +1192,16 @@ function aukit.adpcm(data, channels, sampleRate, topFirst, interleaved, predicto
     local start = os_epoch "utc"
     if interleaved then
         local d = obj.data
+        for j = 1, channels do d[j] = {} end
         for i = 1, len do
             if os_epoch "utc" - start > 3000 then start = os_epoch "utc" sleep(0) end
             for j = 1, channels do
                 local nibble = read()
+                step[j] = ima_step_table[step_index[j]]
                 step_index[j] = clamp(step_index[j] + ima_index_table[nibble], 0, 88)
-                local diff = ((nibble >= 8 and nibble - 16 or nibble) + 0.5) * step[j] / 4
-                predictor[j] = clamp(predictor[j] + diff, -32768, 32767)
-                step[j] = ima_step_table[step_index]
+                local diff = bit32_rshift((nibble % 8) * step[j], 2) + bit32.rshift(step[j], 3)
+                if nibble >= 8 then predictor[j] = clamp(predictor[j] - diff, -32768, 32767)
+                else predictor[j] = clamp(predictor[j] + diff, -32768, 32767) end
                 d[j][i] = predictor[j] / (predictor[j] < 0 and 32768 or 32767)
             end
         end
@@ -1203,14 +1211,95 @@ function aukit.adpcm(data, channels, sampleRate, topFirst, interleaved, predicto
         for i = 1, len do
             if os_epoch "utc" - start > 3000 then start = os_epoch "utc" sleep(0) end
             local nibble = read()
-            step_index = clamp(step_index + ima_index_table[nibble], 0, 88)
-            local diff = ((nibble >= 8 and nibble - 16 or nibble) + 0.5) * step / 4
-            predictor = clamp(predictor + diff, -32768, 32767)
             step = ima_step_table[step_index]
+            step_index = clamp(step_index + ima_index_table[nibble], 0, 88)
+            local diff = bit32_rshift((nibble % 8) * step, 2) + bit32.rshift(step, 3)
+            if nibble >= 8 then predictor = clamp(predictor - diff, -32768, 32767)
+            else predictor = clamp(predictor + diff, -32768, 32767) end
             line[i] = predictor / (predictor < 0 and 32768 or 32767)
         end
         obj.data[j] = line
     end end
+    return obj
+end
+
+--- Creates a new audio object from Microsoft ADPCM data.
+-- @tparam string data The audio data as a raw string
+-- @tparam number blockAlign The number of bytes in each block
+-- @tparam[opt=1] number channels The number of channels present in the audio
+-- @tparam[opt=48000] number sampleRate The sample rate of the audio in Hertz
+-- @tparam[opt] table coefficients Two lists of coefficients to use
+-- to add to the coefficient tables
+-- @treturn Audio A new audio object containing the decoded data
+function aukit.msadpcm(data, blockAlign, channels, sampleRate, coefficients)
+    expect(1, data, "string")
+    expect(2, blockAlign, "number")
+    channels = expect(3, channels, "number", "nil") or 1
+    sampleRate = expect(4, sampleRate, "number", "nil") or 48000
+    expect(5, coefficients, "table", "nil")
+    expect.range(sampleRate, 1)
+    local coeff1, coeff2
+    if coefficients then
+        if type(coefficients[1]) ~= "table" then error("bad argument #5 (first entry is not a table)", 2) end
+        if type(coefficients[2]) ~= "table" then error("bad argument #5 (second entry is not a table)", 2) end
+        if #coefficients[1] ~= #coefficients[2] then error("bad argument #5 (lists are not the same length)", 2) end
+        coeff1, coeff2 = {}, {}
+        for i, v in ipairs(coefficients[1]) do
+            if type(v) ~= "number" then error("bad entry #" .. i .. " in coefficient list 1 (expected number, got " .. type(v) .. ")", 2) end
+            coeff1[i-1] = v
+        end
+        for i, v in ipairs(coefficients[2]) do
+            if type(v) ~= "number" then error("bad entry #" .. i .. " in coefficient list 2 (expected number, got " .. type(v) .. ")", 2) end
+            coeff2[i-1] = v
+        end
+    else coeff1, coeff2 = {[0] = 256, 512, 0, 192, 240, 460, 392}, {[0] = 0, -256, 0, 64, 0, -208, -232} end
+    local obj = setmetatable({sampleRate = sampleRate, data = {{}, channels == 2 and {} or nil}, metadata = {}, info = {bitDepth = 16, dataType = "signed"}}, Audio_mt)
+    local left, right = obj.data[1], obj.data[2]
+    local start = os_epoch "utc"
+    for n = 1, #data, blockAlign do
+        if channels == 2 then
+            local predictorIndexL, predictorIndexR, deltaL, deltaR, sample1L, sample1R, sample2L, sample2R = ("<BBhhhhhh"):unpack(data, n)
+            local c1L, c2L, c1R, c2R = coeff1[predictorIndexL], coeff2[predictorIndexL], coeff1[predictorIndexR], coeff2[predictorIndexR]
+            left[#left+1] = sample2L / (sample2L < 0 and 32768 or 32767)
+            left[#left+1] = sample1L / (sample1L < 0 and 32768 or 32767)
+            right[#right+1] = sample2R / (sample2R < 0 and 32768 or 32767)
+            right[#right+1] = sample1R / (sample1R < 0 and 32768 or 32767)
+            for i = 14, blockAlign - 1 do
+                local b = data:byte(n+i)
+                local hi, lo = bit32_rshift(b, 4), bit32_band(b, 0x0F)
+                if hi >= 8 then hi = hi - 16 end
+                if lo >= 8 then lo = lo - 16 end
+                local predictor = clamp(math_floor((sample1L * c1L + sample2L * c2L) / 256) + hi * deltaL, -32768, 32767)
+                left[#left+1] = predictor / (predictor < 0 and 32768 or 32767)
+                sample2L, sample1L = sample1L, predictor
+                deltaL = math_max(math_floor(msadpcm_adaption_table[hi] * deltaL / 256), 16)
+                predictor = clamp(math_floor((sample1R * c1R + sample2R * c2R) / 256) + lo * deltaR, -32768, 32767)
+                right[#right+1] = predictor / (predictor < 0 and 32768 or 32767)
+                sample2R, sample1R = sample1R, predictor
+                deltaR = math_max(math_floor(msadpcm_adaption_table[lo] * deltaR / 256), 16)
+            end
+        elseif channels == 1 then
+            local predictorIndex, delta, sample1, sample2 = ("<!1Bhhh"):unpack(data)
+            local c1, c2 = coeff1[predictorIndex], coeff2[predictorIndex]
+            left[#left+1] = sample2 / (sample2 < 0 and 32768 or 32767)
+            left[#left+1] = sample1 / (sample1 < 0 and 32768 or 32767)
+            for i = 7, blockAlign - 1 do
+                local b = data:byte(n+i)
+                local hi, lo = bit32_rshift(b, 4), bit32_band(b, 0x0F)
+                if hi >= 8 then hi = hi - 16 end
+                if lo >= 8 then lo = lo - 16 end
+                local predictor = clamp(math_floor((sample1 * c1 + sample2 * c2) / 256) + hi * delta, -32768, 32767)
+                left[#left+1] = predictor / (predictor < 0 and 32768 or 32767)
+                sample2, sample1 = sample1, predictor
+                delta = math_max(math_floor(msadpcm_adaption_table[hi] * delta / 256), 16)
+                predictor = clamp(math_floor((sample1 * c1 + sample2 * c2) / 256) + lo * delta, -32768, 32767)
+                left[#left+1] = predictor / (predictor < 0 and 32768 or 32767)
+                sample2, sample1 = sample1, predictor
+                delta = math_max(math_floor(msadpcm_adaption_table[lo] * delta / 256), 16)
+            end
+        else error("Unsupported number of channels: " .. channels) end
+        if os_epoch "utc" - start > 3000 then start = os_epoch "utc" sleep(0) end
+    end
     return obj
 end
 
@@ -1245,12 +1334,13 @@ function aukit.dfpwm(data, channels, sampleRate)
 end
 
 --- Creates a new audio object from a WAV file. This accepts PCM files up to 32
--- bits, including float data, as well as DFPWM files [as specified here](https://gist.github.com/MCJack123/90c24b64c8e626c7f130b57e9800962c).
+-- bits, including float data, as well as DFPWM files [as specified here](https://gist.github.com/MCJack123/90c24b64c8e626c7f130b57e9800962c),
+-- plus IMA and Microsoft ADPCM formats.
 -- @tparam string data The WAV data to load
 -- @treturn Audio A new audio object with the contents of the WAV file
 function aukit.wav(data)
     expect(1, data, "string")
-    local channels, sampleRate, bitDepth, length, dataType, predictor, step_index
+    local channels, sampleRate, bitDepth, length, dataType, blockAlign, coefficients
     local temp, pos = ("c4"):unpack(data)
     if temp ~= "RIFF" then error("bad argument #1 (not a WAV file)", 2) end
     pos = pos + 4
@@ -1264,29 +1354,77 @@ function aukit.wav(data)
             local chunk = data:sub(pos, pos + size - 1)
             pos = pos + size
             local format
-            format, channels, sampleRate, bitDepth = ("<HHIxxxxxxH"):unpack(chunk)
-            if format ~= 1 and format ~= 2 and format ~= 3 and format ~= 0xFFFE then error("unsupported WAV file", 2) end
+            format, channels, sampleRate, blockAlign, bitDepth = ("<HHIxxxxHH"):unpack(chunk)
             if format == 1 then
                 dataType = bitDepth == 8 and "unsigned" or "signed"
-            elseif format == 0x11 then
-                dataType = "adpcm"
-                -- TODO: read in the correct length values
+            elseif format == 2 then
+                dataType = "msadpcm"
+                local numcoeff = ("<H"):unpack(chunk, 21)
+                if numcoeff > 0 then
+                    coefficients = {{}, {}}
+                    for i = 1, numcoeff do
+                        coefficients[1][i], coefficients[2][i] = ("<hh"):unpack(chunk, i * 4 + 19)
+                    end
+                end
             elseif format == 3 then
                 dataType = "float"
+            elseif format == 0x11 then
+                dataType = "adpcm"
             elseif format == 0xFFFE then
                 bitDepth = ("<H"):unpack(chunk, 19)
                 local uuid = chunk:sub(25, 40)
                 if uuid == wavExtensible.pcm then dataType = bitDepth == 8 and "unsigned" or "signed"
+                elseif uuid == wavExtensible.msadpcm then dataType = "msadpcm"
                 elseif uuid == wavExtensible.adpcm then dataType = "adpcm"
                 elseif uuid == wavExtensible.pcm_float then dataType = "float"
                 elseif uuid == wavExtensible.dfpwm then dataType = "dfpwm"
                 else error("unsupported WAV file", 2) end
-            end
+            else error("unsupported WAV file", 2) end
         elseif temp == "data" then
             local data = str_sub(data, pos, pos + size - 1)
             if #data < size then error("invalid WAV file", 2) end
             local obj
-            if dataType == "adpcm" then error("unsupported WAV file", 2) -- TODO
+            if dataType == "adpcm" then
+                local blocks = {}
+                for n = 1, #data, blockAlign do
+                    if channels == 2 then
+                        local predictorL, indexL, predictorR, indexR = ("<hBxhB"):unpack(data, n)
+                        local nibbles = {}
+                        for i = 8, blockAlign - 1, 8 do
+                            local b = str_byte(data, n+i)
+                            nibbles[(i-7)*2-1] = bit32_band(b, 0x0F)
+                            nibbles[(i-6)*2-1] = bit32_rshift(b, 4)
+                            b = str_byte(data, n+i+1)
+                            nibbles[(i-5)*2-1] = bit32_band(b, 0x0F)
+                            nibbles[(i-4)*2-1] = bit32_rshift(b, 4)
+                            b = str_byte(data, n+i+2)
+                            nibbles[(i-3)*2-1] = bit32_band(b, 0x0F)
+                            nibbles[(i-2)*2-1] = bit32_rshift(b, 4)
+                            b = str_byte(data, n+i+3)
+                            nibbles[(i-1)*2-1] = bit32_band(b, 0x0F)
+                            nibbles[i*2-1] = bit32_rshift(b, 4)
+                            b = str_byte(data, n+i+4)
+                            nibbles[(i-7)*2] = bit32_band(b, 0x0F)
+                            nibbles[(i-6)*2] = bit32_rshift(b, 4)
+                            b = str_byte(data, n+i+5)
+                            nibbles[(i-5)*2] = bit32_band(b, 0x0F)
+                            nibbles[(i-4)*2] = bit32_rshift(b, 4)
+                            b = str_byte(data, n+i+6)
+                            nibbles[(i-3)*2] = bit32_band(b, 0x0F)
+                            nibbles[(i-2)*2] = bit32_rshift(b, 4)
+                            b = str_byte(data, n+i+7)
+                            nibbles[(i-1)*2] = bit32_band(b, 0x0F)
+                            nibbles[i*2] = bit32_rshift(b, 4)
+                        end
+                        blocks[#blocks+1] = aukit.adpcm(nibbles, channels, sampleRate, false, true, {predictorL, predictorR}, {indexL, indexR})
+                    else
+                        local predictor, index = ("<hB"):unpack(data, n)
+                        index = bit32_band(index, 0x0F)
+                        blocks[#blocks+1] = aukit.adpcm(data:sub(n + 4, n + blockAlign - 1), channels, sampleRate, false, false, predictor, index)
+                    end
+                end
+                obj = blocks[1]:concat(table.unpack(blocks, 2))
+            elseif dataType == "msadpcm" then obj = aukit.msadpcm(data, blockAlign, channels == 2, sampleRate, coefficients)
             elseif dataType == "dfpwm" then obj = aukit.dfpwm(data, channels, sampleRate)
             else obj = aukit.pcm(data, bitDepth, dataType, channels, sampleRate, true, false) end
             obj.metadata = meta
