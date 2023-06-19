@@ -6,12 +6,12 @@ All sample rates and channel counts are supported. Functions to convert to Compu
 - Raw linear PCM, 8-, 16-, 24-, or 32-bit signed/unsigned little/big endian
 - Raw linear PCM, 32-bit floating point little/big endian
 - Raw DFPWM
-- Raw Microsoft ADPCM (no streaming)
+- Raw Microsoft ADPCM
 - Raw IMA ADPCM (no streaming)
 - WAV, PCM, 8-bit, 16-bit, 24-bit, 32-bit, or float
 - WAV, DFPWM
-- WAV, Microsoft ADPCM (no streaming)
-- WAV, IMA ADPCM (no streaming)
+- WAV, Microsoft ADPCM
+- WAV, IMA ADPCM
 - AIFF, PCM
 - AU, PCM, 8-bit, 16-bit, 24-bit, 32-bit, or float
 - FLAC, 8-bit, 16-bit, 24-bit, or 32-bit

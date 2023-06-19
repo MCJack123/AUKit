@@ -261,19 +261,27 @@
 <table class="function_list">
 	<tr>
 	<td class="name" nowrap><a href="#aukit.stream.pcm">aukit.stream.pcm (data[, bitDepth=8[, dataType="signed"[, channels=1[, sampleRate=48000[, bigEndian=false[, mono=false]]]]]])</a></td>
-	<td class="summary">Returns an iterator to stream raw PCM data in CC format.</td>
+	<td class="summary">Returns an iterator to stream raw PCM audio in CC format.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#aukit.stream.dfpwm">aukit.stream.dfpwm (data[, sampleRate=48000[, channels=1[, mono=false]]])</a></td>
-	<td class="summary">Returns an iterator to stream data from DFPWM data.</td>
+	<td class="summary">Returns an iterator to stream audio from DFPWM data.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#aukit.stream.msadpcm">aukit.stream.msadpcm (input, blockAlign[, channels=1[, sampleRate=48000[, mono=false[, coefficients]]]])</a></td>
+	<td class="summary">Returns an iterator to stream audio from Microsoft ADPCM data.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#aukit.stream.adpcm">aukit.stream.adpcm (input, blockAlign[, channels=1[, sampleRate=48000[, mono=false]]])</a></td>
+	<td class="summary">Returns an iterator to stream data from IMA ADPCM data.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#aukit.stream.wav">aukit.stream.wav (data[, mono=false[, ignoreHeader=false]])</a></td>
-	<td class="summary">Returns an iterator to stream data from a WAV file.</td>
+	<td class="summary">Returns an iterator to stream audio from a WAV file.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#aukit.stream.aiff">aukit.stream.aiff (data[, mono=false[, ignoreHeader=false]])</a></td>
-	<td class="summary">Returns an iterator to stream data from an AIFF file.</td>
+	<td class="summary">Returns an iterator to stream audio from an AIFF file.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#aukit.stream.au">aukit.stream.au (data[, mono=false[, ignoreHeader=false]])</a></td>
@@ -1043,7 +1051,6 @@
         <li><span class="parameter">coefficients</span>
             <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a></span>
          Two lists of coefficients to use
- to add to the coefficient tables
          (<em>optional</em>)
         </li>
     </ul>
@@ -1467,9 +1474,9 @@
     <strong>aukit.stream.pcm (data[, bitDepth=8[, dataType="signed"[, channels=1[, sampleRate=48000[, bigEndian=false[, mono=false]]]]]])</strong>
     </dt>
     <dd>
-    Returns an iterator to stream raw PCM data in CC format.  Audio will automatically
- be resampled to 48 kHz, and optionally mixed down to mono. Data *must* be
- interleaved - this will not work with planar audio.
+    Returns an iterator to stream raw PCM audio in CC format.  Audio will
+ automatically be resampled to 48 kHz, and optionally mixed down to mono. Data
+ *must* be interleaved - this will not work with planar audio.
 
 
     <h3>Parameters:</h3>
@@ -1535,7 +1542,7 @@
     <strong>aukit.stream.dfpwm (data[, sampleRate=48000[, channels=1[, mono=false]]])</strong>
     </dt>
     <dd>
-    Returns an iterator to stream data from DFPWM data.  Audio will automatically
+    Returns an iterator to stream audio from DFPWM data.  Audio will automatically
  be resampled to 48 kHz. Multiple channels are expected to be interleaved in
  the encoded DFPWM data.
 
@@ -1572,9 +1579,124 @@
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
-           <span class="types"><span class="type">number</span></span>
-        The total length of the audio in seconds, or the length of
- the first chunk if using a function</li>
+           <span class="types"><span class="type">number</span> or <span class="type">nil</span></span>
+        The total length of the audio in seconds, or nil if data
+ is a function</li>
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "aukit.stream.msadpcm"></a>
+    <strong>aukit.stream.msadpcm (input, blockAlign[, channels=1[, sampleRate=48000[, mono=false[, coefficients]]]])</strong>
+    </dt>
+    <dd>
+    Returns an iterator to stream audio from Microsoft ADPCM data.  Audio will
+ automatically be resampled to 48 kHz.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">input</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a> or <span class="type">function():string</span></span>
+         The audio data as a raw string or
+ reader function
+        </li>
+        <li><span class="parameter">blockAlign</span>
+            <span class="types"><span class="type">number</span></span>
+         The number of bytes in each block
+        </li>
+        <li><span class="parameter">channels</span>
+            <span class="types"><span class="type">number</span></span>
+         The number of channels present in the audio
+         (<em>default</em> 1)
+        </li>
+        <li><span class="parameter">sampleRate</span>
+            <span class="types"><span class="type">number</span></span>
+         The sample rate of the audio in Hertz
+         (<em>default</em> 48000)
+        </li>
+        <li><span class="parameter">mono</span>
+            <span class="types"><span class="type">boolean</span></span>
+         Whether to mix the audio down to mono
+         (<em>default</em> false)
+        </li>
+        <li><span class="parameter">coefficients</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a></span>
+         Two lists of coefficients to use
+         (<em>optional</em>)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+        <li>
+           <span class="types"><span class="type">function():{{[number]...}...},number</span></span>
+         An iterator function that returns
+ chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
+ the current position of the audio in seconds</li>
+        <li>
+           <span class="types"><span class="type">number</span> or <span class="type">nil</span></span>
+        The total length of the audio in seconds, or nil if data
+ is a function</li>
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "aukit.stream.adpcm"></a>
+    <strong>aukit.stream.adpcm (input, blockAlign[, channels=1[, sampleRate=48000[, mono=false]]])</strong>
+    </dt>
+    <dd>
+    Returns an iterator to stream data from IMA ADPCM data.  Audio will
+ automatically be resampled to 48 kHz. Data *must* be in the interleaving
+ format used in WAV files (i.e. periodic blocks with 4/8-byte headers,
+ channels alternating every 4 bytes, lower nibble first).
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">input</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a> or <span class="type">function():string</span></span>
+         The audio data as a raw string or
+ reader function
+        </li>
+        <li><span class="parameter">blockAlign</span>
+            <span class="types"><span class="type">number</span></span>
+         The number of bytes in each block
+        </li>
+        <li><span class="parameter">channels</span>
+            <span class="types"><span class="type">number</span></span>
+         The number of channels present in the audio
+         (<em>default</em> 1)
+        </li>
+        <li><span class="parameter">sampleRate</span>
+            <span class="types"><span class="type">number</span></span>
+         The sample rate of the audio in Hertz
+         (<em>default</em> 48000)
+        </li>
+        <li><span class="parameter">mono</span>
+            <span class="types"><span class="type">boolean</span></span>
+         Whether to mix the audio down to mono
+         (<em>default</em> false)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+        <li>
+           <span class="types"><span class="type">function():{{[number]...}...},number</span></span>
+         An iterator function that returns
+ chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
+ the current position of the audio in seconds</li>
+        <li>
+           <span class="types"><span class="type">number</span> or <span class="type">nil</span></span>
+        The total length of the audio in seconds, or nil if data
+ is a function</li>
     </ol>
 
 
@@ -1586,7 +1708,7 @@
     <strong>aukit.stream.wav (data[, mono=false[, ignoreHeader=false]])</strong>
     </dt>
     <dd>
-    Returns an iterator to stream data from a WAV file.  Audio will automatically
+    Returns an iterator to stream audio from a WAV file.  Audio will automatically
  be resampled to 48 kHz, and optionally mixed down to mono. This accepts PCM
  files up to 32 bits, including float data, as well as DFPWM files [as specified here](https://gist.github.com/MCJack123/90c24b64c8e626c7f130b57e9800962c).
 
@@ -1632,8 +1754,8 @@
     <strong>aukit.stream.aiff (data[, mono=false[, ignoreHeader=false]])</strong>
     </dt>
     <dd>
-    Returns an iterator to stream data from an AIFF file.  Audio will automatically
- be resampled to 48 kHz, and optionally mixed down to mono.
+    Returns an iterator to stream audio from an AIFF file.  Audio will
+ automatically be resampled to 48 kHz, and optionally mixed down to mono.
 
 
     <h3>Parameters:</h3>
@@ -2178,7 +2300,7 @@
 </div> <!-- id="main" -->
 <div id="about">
 <i>generated by <a href="http://github.com/stevedonovan/LDoc">LDoc 1.4.6</a></i>
-<i style="float:right;">Last updated 2023-06-18 19:15:45 </i>
+<i style="float:right;">Last updated 2023-06-19 19:48:54 </i>
 </div> <!-- id="about" -->
 </div> <!-- id="container" -->
 </body>

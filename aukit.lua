@@ -104,7 +104,7 @@ end})
 aukit.effects, aukit.stream = {}, {}
 
 --- @tfield string _VERSION The version of AUKit that is loaded. This follows [SemVer](https://semver.org) format.
-aukit._VERSION = "1.5.1"
+aukit._VERSION = "1.6.0"
 
 --- @tfield "none"|"linear"|"cubic"|"sinc" defaultInterpolation Default interpolation mode for @{Audio:resample} and other functions that need to resample.
 aukit.defaultInterpolation = "linear"
@@ -1199,7 +1199,7 @@ function aukit.adpcm(data, channels, sampleRate, topFirst, interleaved, predicto
                 local nibble = read()
                 step[j] = ima_step_table[step_index[j]]
                 step_index[j] = clamp(step_index[j] + ima_index_table[nibble], 0, 88)
-                local diff = bit32_rshift((nibble % 8) * step[j], 2) + bit32.rshift(step[j], 3)
+                local diff = bit32_rshift((nibble % 8) * step[j], 2) + bit32_rshift(step[j], 3)
                 if nibble >= 8 then predictor[j] = clamp(predictor[j] - diff, -32768, 32767)
                 else predictor[j] = clamp(predictor[j] + diff, -32768, 32767) end
                 d[j][i] = predictor[j] / (predictor[j] < 0 and 32768 or 32767)
@@ -1229,7 +1229,6 @@ end
 -- @tparam[opt=1] number channels The number of channels present in the audio
 -- @tparam[opt=48000] number sampleRate The sample rate of the audio in Hertz
 -- @tparam[opt] table coefficients Two lists of coefficients to use
--- to add to the coefficient tables
 -- @treturn Audio A new audio object containing the decoded data
 function aukit.msadpcm(data, blockAlign, channels, sampleRate, coefficients)
     expect(1, data, "string")
@@ -1424,7 +1423,7 @@ function aukit.wav(data)
                     end
                 end
                 obj = blocks[1]:concat(table.unpack(blocks, 2))
-            elseif dataType == "msadpcm" then obj = aukit.msadpcm(data, blockAlign, channels == 2, sampleRate, coefficients)
+            elseif dataType == "msadpcm" then obj = aukit.msadpcm(data, blockAlign, channels, sampleRate, coefficients)
             elseif dataType == "dfpwm" then obj = aukit.dfpwm(data, channels, sampleRate)
             else obj = aukit.pcm(data, bitDepth, dataType, channels, sampleRate, true, false) end
             obj.metadata = meta
@@ -1789,9 +1788,9 @@ end
 --- aukit.stream
 -- @section aukit.stream
 
---- Returns an iterator to stream raw PCM data in CC format. Audio will automatically
--- be resampled to 48 kHz, and optionally mixed down to mono. Data *must* be
--- interleaved - this will not work with planar audio.
+--- Returns an iterator to stream raw PCM audio in CC format. Audio will
+-- automatically be resampled to 48 kHz, and optionally mixed down to mono. Data
+-- *must* be interleaved - this will not work with planar audio.
 -- @tparam string|table|function data The audio data, either as a raw string, a
 -- table of values (in the format specified by `bitDepth` and `dataType`), or a
 -- function that returns either of those types. Functions will be called at
@@ -2005,7 +2004,7 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
     end, len / sampleRate
 end
 
---- Returns an iterator to stream data from DFPWM data. Audio will automatically
+--- Returns an iterator to stream audio from DFPWM data. Audio will automatically
 -- be resampled to 48 kHz. Multiple channels are expected to be interleaved in
 -- the encoded DFPWM data.
 -- @tparam string|function():string data The DFPWM data to decode, or a function
@@ -2016,8 +2015,8 @@ end
 -- @treturn function():{{[number]...}...},number An iterator function that returns
 -- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
 -- the current position of the audio in seconds
--- @treturn number The total length of the audio in seconds, or the length of
--- the first chunk if using a function
+-- @treturn number|nil The total length of the audio in seconds, or nil if data
+-- is a function
 function aukit.stream.dfpwm(data, sampleRate, channels, mono)
     expect(1, data, "string", "function")
     sampleRate = expect(2, sampleRate, "number", "nil") or 48000
@@ -2030,9 +2029,10 @@ function aukit.stream.dfpwm(data, sampleRate, channels, mono)
     local last = 0
     local isstr = type(data) == "string"
     return function()
-        if pos > #data then return nil end
         local d
-        if isstr then d = data:sub(pos, pos + 6000 * channels)
+        if isstr then
+            if pos > #data then return nil end
+            d = data:sub(pos, pos + 6000 * channels)
         else d = data() if not d then return nil end end
         local audio = decoder(d)
         if audio == nil or #audio == 0 then return nil end
@@ -2061,10 +2061,251 @@ function aukit.stream.dfpwm(data, sampleRate, channels, mono)
         local p = pos
         pos = pos + 6000 * channels
         return lines, p * 8 / sampleRate / channels
-    end, #data * 8 / sampleRate / channels
+    end, isstr and #data * 8 / sampleRate / channels
 end
 
---- Returns an iterator to stream data from a WAV file. Audio will automatically
+--- Returns an iterator to stream audio from Microsoft ADPCM data. Audio will
+-- automatically be resampled to 48 kHz.
+-- @tparam string|function():string input The audio data as a raw string or
+-- reader function
+-- @tparam number blockAlign The number of bytes in each block
+-- @tparam[opt=1] number channels The number of channels present in the audio
+-- @tparam[opt=48000] number sampleRate The sample rate of the audio in Hertz
+-- @tparam[opt=false] boolean mono Whether to mix the audio down to mono
+-- @tparam[opt] table coefficients Two lists of coefficients to use
+-- @treturn function():{{[number]...}...},number An iterator function that returns
+-- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
+-- the current position of the audio in seconds
+-- @treturn number|nil The total length of the audio in seconds, or nil if data
+-- is a function
+function aukit.stream.msadpcm(input, blockAlign, channels, sampleRate, mono, coefficients)
+    expect(1, input, "string", "function")
+    expect(2, blockAlign, "number")
+    channels = expect(3, channels, "number", "nil") or 1
+    sampleRate = expect(4, sampleRate, "number", "nil") or 48000
+    expect(5, mono, "boolean", "nil")
+    expect(6, coefficients, "table", "nil")
+    expect.range(sampleRate, 1)
+    local isfunc = type(input) == "function"
+    local coeff1, coeff2
+    if coefficients then
+        if type(coefficients[1]) ~= "table" then error("bad argument #5 (first entry is not a table)", 2) end
+        if type(coefficients[2]) ~= "table" then error("bad argument #5 (second entry is not a table)", 2) end
+        if #coefficients[1] ~= #coefficients[2] then error("bad argument #5 (lists are not the same length)", 2) end
+        coeff1, coeff2 = {}, {}
+        for i, v in ipairs(coefficients[1]) do
+            if type(v) ~= "number" then error("bad entry #" .. i .. " in coefficient list 1 (expected number, got " .. type(v) .. ")", 2) end
+            coeff1[i-1] = v
+        end
+        for i, v in ipairs(coefficients[2]) do
+            if type(v) ~= "number" then error("bad entry #" .. i .. " in coefficient list 2 (expected number, got " .. type(v) .. ")", 2) end
+            coeff2[i-1] = v
+        end
+    else coeff1, coeff2 = {[0] = 256, 512, 0, 192, 240, 460, 392}, {[0] = 0, -256, 0, 64, 0, -208, -232} end
+    local ratio = 48000 / sampleRate
+    local interp = interpolate[aukit.defaultInterpolation]
+    local n, pos = 1, 0
+    local data = isfunc and input() or input
+    if channels == 2 then
+        local samplesPerBlock = blockAlign - 14
+        local iterPerSecond = math_ceil(sampleRate / samplesPerBlock)
+        local bytesPerSecond = blockAlign * iterPerSecond
+        local newlen = math_floor(samplesPerBlock * ratio)
+        local lastL, lastR
+        return function()
+            if data == nil then return nil end
+            local target = n + bytesPerSecond
+            local retval = {{}, not mono and {} or nil}
+            local rp = 0
+            while n < target do
+                if isfunc and n > #data then
+                    pos = pos + #data
+                    n = n - #data
+                    data = input()
+                    if data == nil then return nil end
+                end
+                if n > #data then break end
+                local left, right = {}, {}
+                if lastL then for i = 1, #lastL do
+                    left[i-#lastL-1] = lastL[i]
+                    right[i-#lastR-1] = lastR[i]
+                end end
+                local predictorIndexL, predictorIndexR, deltaL, deltaR, sample1L, sample1R, sample2L, sample2R = ("<BBhhhhhh"):unpack(data, n)
+                local c1L, c2L, c1R, c2R = coeff1[predictorIndexL], coeff2[predictorIndexL], coeff1[predictorIndexR], coeff2[predictorIndexR]
+                left[1] = math_floor(sample2L / (sample2L < 0 and 128 or 127))
+                left[2] = math_floor(sample1L / (sample1L < 0 and 128 or 127))
+                right[1] = math_floor(sample2R / (sample2R < 0 and 128 or 127))
+                right[2] = math_floor(sample1R / (sample1R < 0 and 128 or 127))
+                for i = 14, blockAlign - 1 do
+                    local b = data:byte(n+i)
+                    local hi, lo = bit32_rshift(b, 4), bit32_band(b, 0x0F)
+                    if hi >= 8 then hi = hi - 16 end
+                    if lo >= 8 then lo = lo - 16 end
+                    local predictor = clamp(math_floor((sample1L * c1L + sample2L * c2L) / 256) + hi * deltaL, -32768, 32767)
+                    left[#left+1] = math_floor(predictor / (predictor < 0 and 128 or 127))
+                    sample2L, sample1L = sample1L, predictor
+                    deltaL = math_max(math_floor(msadpcm_adaption_table[hi] * deltaL / 256), 16)
+                    predictor = clamp(math_floor((sample1R * c1R + sample2R * c2R) / 256) + lo * deltaR, -32768, 32767)
+                    right[#right+1] = math_floor(predictor / (predictor < 0 and 128 or 127))
+                    sample2R, sample1R = sample1R, predictor
+                    deltaR = math_max(math_floor(msadpcm_adaption_table[lo] * deltaR / 256), 16)
+                end
+                lastL, lastR = left, right
+                for i = 1, newlen do
+                    local x = (i - 1) / ratio + 1
+                    local l, r
+                    if x % 1 == 0 then l, r = left[x], right[x]
+                    else l, r = interp(left, x), interp(right, x) end
+                    if mono then retval[1][rp+i] = clamp(math_floor(l + r / 2), -128, 127)
+                    else retval[1][rp+i], retval[2][rp+i] = clamp(math_floor(l), -128, 127), clamp(math_floor(r), -128, 127) end
+                end
+                rp = rp + newlen
+                n = n + blockAlign
+            end
+            if #retval[1] == 0 then return nil end
+            return retval, (n + pos) / bytesPerSecond
+        end, not isfunc and #data / blockAlign * samplesPerBlock / sampleRate or nil
+    elseif channels == 1 then
+        local samplesPerBlock = (blockAlign - 7) * 2
+        local iterPerSecond = math_ceil(sampleRate / samplesPerBlock)
+        local bytesPerSecond = blockAlign * iterPerSecond
+        local newlen = math_floor(samplesPerBlock * ratio)
+        return function()
+            if data == nil then return nil end
+            local target = n + bytesPerSecond
+            local retval = {{}}
+            local rp = 0
+            while n < target do
+                if isfunc and n > #data then
+                    pos = pos + #data
+                    n = n - #data
+                    data = input()
+                    if data == nil then return nil end
+                end
+                if n > #data then break end
+                local left = {}
+                local predictorIndex, delta, sample1, sample2 = ("<!1Bhhh"):unpack(data)
+                local c1, c2 = coeff1[predictorIndex], coeff2[predictorIndex]
+                left[1] = sample2 / (sample2 < 0 and 128 or 127)
+                left[2] = sample1 / (sample1 < 0 and 128 or 127)
+                for i = 7, blockAlign - 1 do
+                    local b = data:byte(n+i)
+                    local hi, lo = bit32_rshift(b, 4), bit32_band(b, 0x0F)
+                    if hi >= 8 then hi = hi - 16 end
+                    if lo >= 8 then lo = lo - 16 end
+                    local predictor = clamp(math_floor((sample1 * c1 + sample2 * c2) / 256) + hi * delta, -32768, 32767)
+                    left[#left+1] = predictor / (predictor < 0 and 128 or 127)
+                    sample2, sample1 = sample1, predictor
+                    delta = math_max(math_floor(msadpcm_adaption_table[hi] * delta / 256), 16)
+                    predictor = clamp(math_floor((sample1 * c1 + sample2 * c2) / 256) + lo * delta, -32768, 32767)
+                    left[#left+1] = predictor / (predictor < 0 and 128 or 127)
+                    sample2, sample1 = sample1, predictor
+                    delta = math_max(math_floor(msadpcm_adaption_table[lo] * delta / 256), 16)
+                end
+                for i = 1, newlen do
+                    local x = (i - 1) / ratio + 1
+                    if x % 1 == 0 then retval[1][rp+i] = clamp(math_floor(left[x]), -128, 127)
+                    else retval[1][rp+i] = clamp(math_floor(interp(left, x)), -128, 127) end
+                end
+                rp = rp + newlen
+                n = n + blockAlign
+            end
+            if #retval[1] == 0 then return nil end
+            return retval, (n + pos) / bytesPerSecond
+        end, not isfunc and #data / blockAlign * samplesPerBlock / sampleRate or nil
+    else error("Unsupported number of channels: " .. channels) end
+end
+
+--- Returns an iterator to stream data from IMA ADPCM data. Audio will
+-- automatically be resampled to 48 kHz. Data *must* be in the interleaving
+-- format used in WAV files (i.e. periodic blocks with 4/8-byte headers,
+-- channels alternating every 4 bytes, lower nibble first).
+-- @tparam string|function():string input The audio data as a raw string or
+-- reader function
+-- @tparam number blockAlign The number of bytes in each block
+-- @tparam[opt=1] number channels The number of channels present in the audio
+-- @tparam[opt=48000] number sampleRate The sample rate of the audio in Hertz
+-- @tparam[opt=false] boolean mono Whether to mix the audio down to mono
+-- @treturn function():{{[number]...}...},number An iterator function that returns
+-- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
+-- the current position of the audio in seconds
+-- @treturn number|nil The total length of the audio in seconds, or nil if data
+-- is a function
+function aukit.stream.adpcm(input, blockAlign, channels, sampleRate, mono)
+    expect(1, input, "string", "function")
+    expect(2, blockAlign, "number")
+    channels = expect(3, channels, "number", "nil") or 1
+    sampleRate = expect(4, sampleRate, "number", "nil") or 48000
+    expect(5, mono, "boolean", "nil")
+    expect.range(sampleRate, 1)
+    local isfunc = type(input) == "function"
+    local ratio = 48000 / sampleRate
+    local interp = interpolate[aukit.defaultInterpolation]
+    local n, pos = 1, 0
+    local data = isfunc and input() or input
+    local samplesPerBlock = (blockAlign - 4 * channels) * 2 / channels
+    local iterPerSecond = math_ceil(sampleRate / samplesPerBlock)
+    local bytesPerSecond = blockAlign * iterPerSecond
+    local newlen = math_floor(samplesPerBlock * ratio)
+    local last
+    print(blockAlign, samplesPerBlock, iterPerSecond, bytesPerSecond, newlen)
+    return function()
+        if data == nil then return nil end
+        local target = n + bytesPerSecond
+        local retval = {{}}
+        if not mono then for i = 2, channels do retval[i] = {} end end
+        local rp = 0
+        while n < target do
+            if isfunc and n > #data then
+                pos = pos + #data
+                n = n - #data
+                data = input()
+                if data == nil then return nil end
+            end
+            if n > #data then break end
+            local d = {}
+            for i = 1, channels do d[i] = {} end
+            if last then for i = 1, channels do for j = 1, #last[i] do d[j-#last[i]-1] = last[i][j] end end end
+            local predictor, step_index, step = {}, {}, {}
+            for i = 1, channels do predictor[i], step_index[i] = ("<hB"):unpack(data, n + (i - 1) * 4) end
+            for i = channels * 4, blockAlign, channels * 4 do
+                local p = (i - channels * 4) / channels * 2 + 1
+                if #data < n + i + channels*4 then break end
+                for j = 1, channels do
+                    local num = ("<I"):unpack(data, n + i + (j-1)*4)
+                    for k = 0, 7 do
+                        local nibble = bit32.extract(num, k*4, 4)
+                        step[j] = ima_step_table[step_index[j]]
+                        step_index[j] = clamp(step_index[j] + ima_index_table[nibble], 0, 88)
+                        local diff = bit32_rshift((nibble % 8) * step[j], 2) + bit32_rshift(step[j], 3)
+                        if nibble >= 8 then predictor[j] = clamp(predictor[j] - diff, -32768, 32767)
+                        else predictor[j] = clamp(predictor[j] + diff, -32768, 32767) end
+                        d[j][p+k] = predictor[j] / (predictor[j] < 0 and 128 or 127)
+                    end
+                end
+            end
+            last = d
+            if #d[1] < samplesPerBlock then newlen = math_floor(#d[1] * ratio) end
+            for i = 1, newlen do
+                local x = (i - 1) / ratio + 1
+                local c = {}
+                if x % 1 == 0 then for j = 1, channels do c[j] = d[j][x] end
+                else for j = 1, channels do c[j] = interp(d[j], x) end end
+                if mono then
+                    local n = 0
+                    for j = 1, channels do n = n + c[j] end
+                    retval[1][rp+i] = clamp(math_floor(n / channels), -128, 127)
+                else for j = 1, channels do retval[j][rp+i] = clamp(math_floor(c[j]), -128, 127) end end
+            end
+            rp = rp + newlen
+            n = n + blockAlign
+        end
+        if #retval[1] == 0 then return nil end
+        return retval, (n + pos) / bytesPerSecond
+    end, not isfunc and #data / blockAlign * samplesPerBlock / sampleRate or nil
+end
+
+--- Returns an iterator to stream audio from a WAV file. Audio will automatically
 -- be resampled to 48 kHz, and optionally mixed down to mono. This accepts PCM
 -- files up to 32 bits, including float data, as well as DFPWM files [as specified here](https://gist.github.com/MCJack123/90c24b64c8e626c7f130b57e9800962c).
 -- @tparam string|function():string data The WAV file to decode, or a function
@@ -2080,7 +2321,7 @@ function aukit.stream.wav(data, mono, ignoreHeader)
     local fn
     if type(data) == "function" then fn, data = data, data() end
     expect(1, data, "string")
-    local channels, sampleRate, bitDepth, length, dataType
+    local channels, sampleRate, bitDepth, length, dataType, blockAlign, coefficients
     local temp, pos = ("c4"):unpack(data)
     if temp ~= "RIFF" then error("bad argument #1 (not a WAV file)", 2) end
     pos = pos + 4
@@ -2094,24 +2335,32 @@ function aukit.stream.wav(data, mono, ignoreHeader)
             local chunk = data:sub(pos, pos + size - 1)
             pos = pos + size
             local format
-            format, channels, sampleRate, bitDepth = ("<HHIxxxxxxH"):unpack(chunk)
-            if format ~= 1 and format ~= 2 and format ~= 3 and format ~= 0xFFFE then error("unsupported WAV file", 2) end
+            format, channels, sampleRate, blockAlign, bitDepth = ("<HHIxxxxHH"):unpack(chunk)
             if format == 1 then
                 dataType = bitDepth == 8 and "unsigned" or "signed"
-            elseif format == 0x11 then
-                dataType = "adpcm"
-                -- TODO: read in the correct length values
+            elseif format == 2 then
+                dataType = "msadpcm"
+                local numcoeff = ("<H"):unpack(chunk, 21)
+                if numcoeff > 0 then
+                    coefficients = {{}, {}}
+                    for i = 1, numcoeff do
+                        coefficients[1][i], coefficients[2][i] = ("<hh"):unpack(chunk, i * 4 + 19)
+                    end
+                end
             elseif format == 3 then
                 dataType = "float"
+            elseif format == 0x11 then
+                dataType = "adpcm"
             elseif format == 0xFFFE then
                 bitDepth = ("<H"):unpack(chunk, 19)
                 local uuid = chunk:sub(25, 40)
                 if uuid == wavExtensible.pcm then dataType = bitDepth == 8 and "unsigned" or "signed"
                 elseif uuid == wavExtensible.adpcm then dataType = "adpcm"
+                elseif uuid == wavExtensible.msadpcm then dataType = "msadpcm"
                 elseif uuid == wavExtensible.pcm_float then dataType = "float"
                 elseif uuid == wavExtensible.dfpwm then dataType = "dfpwm"
                 else error("unsupported WAV file", 2) end
-            end
+            else error("unsupported WAV file", 2) end
         elseif temp == "data" then
             local data = data:sub(pos, pos + size - 1)
             if not fn and #data < size then error("invalid WAV file", 2) end
@@ -2127,7 +2376,8 @@ function aukit.stream.wav(data, mono, ignoreHeader)
                     else return fn() end
                 end
             end
-            if dataType == "adpcm" then error("unsupported WAV file", 2) -- TODO
+            if dataType == "adpcm" then return aukit.stream.adpcm(data, blockAlign, channels, sampleRate, mono)
+            elseif dataType == "msadpcm" then return aukit.stream.msadpcm(data, blockAlign, channels, sampleRate, mono, coefficients)
             elseif dataType == "dfpwm" then return aukit.stream.dfpwm(data, sampleRate, channels, mono), size / channels / (bitDepth / 8) / sampleRate
             else return aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, false, mono), size / channels / (bitDepth / 8) / sampleRate end
         elseif temp == "fact" then
@@ -2138,8 +2388,8 @@ function aukit.stream.wav(data, mono, ignoreHeader)
     error("invalid WAV file", 2)
 end
 
---- Returns an iterator to stream data from an AIFF file. Audio will automatically
--- be resampled to 48 kHz, and optionally mixed down to mono.
+--- Returns an iterator to stream audio from an AIFF file. Audio will
+-- automatically be resampled to 48 kHz, and optionally mixed down to mono.
 -- @tparam string|function():string data The AIFF file to decode, or a function
 -- returning chunks to decode (the first chunk MUST contain the ENTIRE header)
 -- @tparam[opt=false] boolean mono Whether to mix the audio to mono
