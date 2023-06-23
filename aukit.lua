@@ -87,7 +87,7 @@
 local expect = require "cc.expect"
 local dfpwm = require "cc.audio.dfpwm"
 
-local bit32_band, bit32_rshift, bit32_btest = bit32.band, bit32.rshift, bit32.btest
+local bit32_band, bit32_bxor, bit32_lshift, bit32_rshift, bit32_btest, bit32_extract = bit32.band, bit32.bxor, bit32.lshift, bit32.rshift, bit32.btest, bit32.extract
 local math_floor, math_ceil, math_sin, math_abs, math_fmod, math_min, math_max, math_pi = math.floor, math.ceil, math.sin, math.abs, math.fmod, math.min, math.max, math.pi
 local os_epoch = os.epoch
 local str_pack, str_unpack, str_sub, str_byte, str_rep = string.pack, string.unpack, string.sub, string.byte, string.rep
@@ -1302,6 +1302,37 @@ function aukit.msadpcm(data, blockAlign, channels, sampleRate, coefficients)
     return obj
 end
 
+--- Creates a new audio object from G.711 u-law/A-law data.
+-- @tparam string data The audio data as a raw string
+-- @tparam boolean ulaw Whether the audio uses u-law (true) or A-law (false).
+-- @tparam[opt=1] number channels The number of channels present in the audio
+-- @tparam[opt=8000] number sampleRate The sample rate of the audio in Hertz
+-- @treturn Audio A new audio object containing the decoded data
+function aukit.g711(data, ulaw, channels, sampleRate)
+    expect(1, data, "string")
+    expect(2, ulaw, "boolean")
+    channels = expect(3, channels, "number", "nil") or 1
+    sampleRate = expect(4, sampleRate, "number", "nil") or 8000
+    local retval = {}
+    local csize = jit and 7680 or 32768
+    local xor = ulaw and 0xFF or 0x55
+    for i = 1, channels do retval[i] = {} end
+    local start = os_epoch "utc"
+    for i = 1, #data, csize do
+        local bytes = {str_byte(data, i, i + csize - 1)}
+        for j = 1, #bytes do
+            local b = bit32_bxor(bytes[j], xor)
+            local m, e = bit32_band(b, 0x0F), bit32_extract(b, 4, 3)
+            if not ulaw and e == 0 then m = m * 4 + 2
+            else m = bit32_lshift(m * 2 + 33, e) end
+            if ulaw then m = m - 33 end
+            retval[(i+j-2) % channels + 1][math_floor((i+j-2) / channels + 1)] = m / (bit32_btest(b, 0x80) == ulaw and -0x2000 or 0x2000)
+        end
+        if os_epoch "utc" - start > 3000 then start = os_epoch "utc" sleep(0) end
+    end
+    return setmetatable({sampleRate = sampleRate, data = retval, metadata = {bitDepth = ulaw and 14 or 13, dataType = "signed"}, info = {}}, Audio_mt)
+end
+
 --- Creates a new audio object from DFPWM1a data. All channels are expected to
 -- share the same decoder, and are stored interleaved in a single stream.
 -- @tparam string data The audio data as a raw string
@@ -1367,6 +1398,10 @@ function aukit.wav(data)
                 end
             elseif format == 3 then
                 dataType = "float"
+            elseif format == 6 then
+                dataType = "alaw"
+            elseif format == 7 then
+                dataType = "ulaw"
             elseif format == 0x11 then
                 dataType = "adpcm"
             elseif format == 0xFFFE then
@@ -1424,6 +1459,7 @@ function aukit.wav(data)
                 end
                 obj = blocks[1]:concat(table.unpack(blocks, 2))
             elseif dataType == "msadpcm" then obj = aukit.msadpcm(data, blockAlign, channels, sampleRate, coefficients)
+            elseif dataType == "alaw" or dataType == "ulaw" then obj = aukit.g711(data, dataType == "ulaw", channels, sampleRate)
             elseif dataType == "dfpwm" then obj = aukit.dfpwm(data, channels, sampleRate)
             else obj = aukit.pcm(data, bitDepth, dataType, channels, sampleRate, true, false) end
             obj.metadata = meta
@@ -2038,7 +2074,7 @@ function aukit.stream.dfpwm(data, sampleRate, channels, mono)
         if audio == nil or #audio == 0 then return nil end
         audio[0], last = last, audio[#audio]
         os.queueEvent("nosleep")
-        os.pullEvent()
+        repeat until "nosleep" == os.pullEvent()
         local ratio = 48000 / sampleRate
         local newlen = #audio * ratio
         local interp = interpolate[aukit.defaultInterpolation]
@@ -2057,7 +2093,7 @@ function aukit.stream.dfpwm(data, sampleRate, channels, mono)
             if mono then lines[1][math_ceil(i / channels)] = n / channels end
         end
         os.queueEvent("nosleep")
-        os.pullEvent()
+        repeat until "nosleep" == os.pullEvent()
         local p = pos
         pos = pos + 6000 * channels
         return lines, p * 8 / sampleRate / channels
@@ -2274,7 +2310,7 @@ function aukit.stream.adpcm(input, blockAlign, channels, sampleRate, mono)
                 for j = 1, channels do
                     local num = ("<I"):unpack(data, n + i + (j-1)*4)
                     for k = 0, 7 do
-                        local nibble = bit32.extract(num, k*4, 4)
+                        local nibble = bit32_extract(num, k*4, 4)
                         step[j] = ima_step_table[step_index[j]]
                         step_index[j] = clamp(step_index[j] + ima_index_table[nibble], 0, 88)
                         local diff = bit32_rshift((nibble % 8) * step[j], 2) + bit32_rshift(step[j], 3)
@@ -2534,7 +2570,7 @@ function aukit.stream.flac(data, mono)
             local ok, res = saferesume(coro)
             if not ok or res == nil or res.sampleRate then break end
             os.queueEvent("nosleep")
-            os.pullEvent()
+            repeat until "nosleep" == os.pullEvent()
             for c = 1, #res do
                 chunk[c] = chunk[c] or {}
                 local src, dest = res[c], chunk[c]
@@ -2555,7 +2591,7 @@ function aukit.stream.flac(data, mono)
                 last = {src[#src-1], src[#src]}
             end
             os.queueEvent("nosleep")
-            os.pullEvent()
+            repeat until "nosleep" == os.pullEvent()
         end
         pos = pos + #chunk[1] / 48000
         return chunk, pos
