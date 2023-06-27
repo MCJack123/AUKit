@@ -51,9 +51,9 @@
 <p> AUKit is a framework designed to simplify the process of loading, modifying,
  and playing audio files in various formats.</p>
 <p> It includes support for loading
- audio from many sources, including PCM, DFPWM, and IMA ADPCM codecs, as well
- as WAV, AIFF, AU, and FLAC files. It can also generate audio on-the-fly as
- tones, noise, or silence.
+ audio from many sources, including PCM, DFPWM, G.711, and ADPCM codecs, as
+ well as WAV, AIFF, AU, and FLAC files. It can also generate audio on-the-fly
+ as tones, noise, or silence.
 <p> AUKit uses a structure called Audio to store information about each audio
  chunk. An audio object holds the sample rate of the audio, as well as the
  data for each channel stored as floating-point numbers. Audio objects can
@@ -212,6 +212,10 @@
 	<td class="summary">Creates a new audio object from Microsoft ADPCM data.</td>
 	</tr>
 	<tr>
+	<td class="name" nowrap><a href="#g711">g711 (data, ulaw[, channels=1[, sampleRate=8000]])</a></td>
+	<td class="summary">Creates a new audio object from G.711 u-law/A-law data.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#dfpwm">dfpwm (data[, channels=1[, sampleRate=48000]])</a></td>
 	<td class="summary">Creates a new audio object from DFPWM1a data.</td>
 	</tr>
@@ -221,7 +225,7 @@
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#aiff">aiff (data)</a></td>
-	<td class="summary">Creates a new audio object from an AIFF file.</td>
+	<td class="summary">Creates a new audio object from an AIFF or AIFC file.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#au">au (data)</a></td>
@@ -276,12 +280,16 @@
 	<td class="summary">Returns an iterator to stream data from IMA ADPCM data.</td>
 	</tr>
 	<tr>
+	<td class="name" nowrap><a href="#aukit.stream.g711">aukit.stream.g711 (input, ulaw[, channels=1[, sampleRate=8000[, mono=false]]])</a></td>
+	<td class="summary">Returns an iterator to stream data from u-law/A-law G.711 data.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#aukit.stream.wav">aukit.stream.wav (data[, mono=false[, ignoreHeader=false]])</a></td>
 	<td class="summary">Returns an iterator to stream audio from a WAV file.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#aukit.stream.aiff">aukit.stream.aiff (data[, mono=false[, ignoreHeader=false]])</a></td>
-	<td class="summary">Returns an iterator to stream audio from an AIFF file.</td>
+	<td class="summary">Returns an iterator to stream audio from an AIFF or AIFC file.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#aukit.stream.au">aukit.stream.au (data[, mono=false[, ignoreHeader=false]])</a></td>
@@ -1067,6 +1075,47 @@
 
 </dd>
     <dt>
+    <a name = "g711"></a>
+    <strong>g711 (data, ulaw[, channels=1[, sampleRate=8000]])</strong>
+    </dt>
+    <dd>
+    Creates a new audio object from G.711 u-law/A-law data.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">data</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         The audio data as a raw string
+        </li>
+        <li><span class="parameter">ulaw</span>
+            <span class="types"><span class="type">boolean</span></span>
+         Whether the audio uses u-law (true) or A-law (false).
+        </li>
+        <li><span class="parameter">channels</span>
+            <span class="types"><span class="type">number</span></span>
+         The number of channels present in the audio
+         (<em>default</em> 1)
+        </li>
+        <li><span class="parameter">sampleRate</span>
+            <span class="types"><span class="type">number</span></span>
+         The sample rate of the audio in Hertz
+         (<em>default</em> 8000)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
+        A new audio object containing the decoded data
+    </ol>
+
+
+
+
+</dd>
+    <dt>
     <a name = "dfpwm"></a>
     <strong>dfpwm (data[, channels=1[, sampleRate=48000]])</strong>
     </dt>
@@ -1138,7 +1187,7 @@
     <strong>aiff (data)</strong>
     </dt>
     <dd>
-    Creates a new audio object from an AIFF file.
+    Creates a new audio object from an AIFF or AIFC file.
 
 
     <h3>Parameters:</h3>
@@ -1653,9 +1702,9 @@
     </dt>
     <dd>
     Returns an iterator to stream data from IMA ADPCM data.  Audio will
- automatically be resampled to 48 kHz. Data *must* be in the interleaving
- format used in WAV files (i.e. periodic blocks with 4/8-byte headers,
- channels alternating every 4 bytes, lower nibble first).
+ automatically be resampled to 48 kHz, and mixed to mono if desired. Data
+ *must* be in the interleaving format used in WAV files (i.e. periodic blocks
+ with 4/8-byte headers, channels alternating every 4 bytes, lower nibble first).
 
 
     <h3>Parameters:</h3>
@@ -1678,6 +1727,60 @@
             <span class="types"><span class="type">number</span></span>
          The sample rate of the audio in Hertz
          (<em>default</em> 48000)
+        </li>
+        <li><span class="parameter">mono</span>
+            <span class="types"><span class="type">boolean</span></span>
+         Whether to mix the audio down to mono
+         (<em>default</em> false)
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+        <li>
+           <span class="types"><span class="type">function():{{[number]...}...},number</span></span>
+         An iterator function that returns
+ chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
+ the current position of the audio in seconds</li>
+        <li>
+           <span class="types"><span class="type">number</span> or <span class="type">nil</span></span>
+        The total length of the audio in seconds, or nil if data
+ is a function</li>
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "aukit.stream.g711"></a>
+    <strong>aukit.stream.g711 (input, ulaw[, channels=1[, sampleRate=8000[, mono=false]]])</strong>
+    </dt>
+    <dd>
+    Returns an iterator to stream data from u-law/A-law G.711 data.  Audio will
+ automatically be resampled to 48 kHz, and mixed to mono if desired.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">input</span>
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a> or <span class="type">function():string</span></span>
+         The audio data as a raw string or
+ reader function
+        </li>
+        <li><span class="parameter">ulaw</span>
+            <span class="types"><span class="type">boolean</span></span>
+         Whether the audio uses u-law (true) or A-law (false).
+        </li>
+        <li><span class="parameter">channels</span>
+            <span class="types"><span class="type">number</span></span>
+         The number of channels present in the audio
+         (<em>default</em> 1)
+        </li>
+        <li><span class="parameter">sampleRate</span>
+            <span class="types"><span class="type">number</span></span>
+         The sample rate of the audio in Hertz
+         (<em>default</em> 8000)
         </li>
         <li><span class="parameter">mono</span>
             <span class="types"><span class="type">boolean</span></span>
@@ -1754,7 +1857,7 @@
     <strong>aukit.stream.aiff (data[, mono=false[, ignoreHeader=false]])</strong>
     </dt>
     <dd>
-    Returns an iterator to stream audio from an AIFF file.  Audio will
+    Returns an iterator to stream audio from an AIFF or AIFC file.  Audio will
  automatically be resampled to 48 kHz, and optionally mixed down to mono.
 
 
@@ -2300,7 +2403,7 @@
 </div> <!-- id="main" -->
 <div id="about">
 <i>generated by <a href="http://github.com/stevedonovan/LDoc">LDoc 1.4.6</a></i>
-<i style="float:right;">Last updated 2023-06-19 19:48:54 </i>
+<i style="float:right;">Last updated 2023-06-27 02:22:08 </i>
 </div> <!-- id="about" -->
 </div> <!-- id="container" -->
 </body>

@@ -2,9 +2,9 @@
 --
 -- AUKit is a framework designed to simplify the process of loading, modifying,
 -- and playing audio files in various formats. It includes support for loading
--- audio from many sources, including PCM, DFPWM, and IMA ADPCM codecs, as well
--- as WAV, AIFF, AU, and FLAC files. It can also generate audio on-the-fly as
--- tones, noise, or silence.
+-- audio from many sources, including PCM, DFPWM, G.711, and ADPCM codecs, as
+-- well as WAV, AIFF, AU, and FLAC files. It can also generate audio on-the-fly
+-- as tones, noise, or silence.
 --
 -- AUKit uses a structure called Audio to store information about each audio
 -- chunk. An audio object holds the sample rate of the audio, as well as the
@@ -132,6 +132,8 @@ local wavExtensible = {
     dfpwm = uuidBytes(dfpwmUUID),
     pcm = uuidBytes "01000000-0000-1000-8000-00aa00389b71",
     msadpcm = uuidBytes "02000000-0000-1000-8000-00aa00389b71",
+    alaw = uuidBytes "06000000-0000-1000-8000-00aa00389b71",
+    ulaw = uuidBytes "07000000-0000-1000-8000-00aa00389b71",
     adpcm = uuidBytes "11000000-0000-1000-8000-00aa00389b71",
     pcm_float = uuidBytes "03000000-0000-1000-8000-00aa00389b71"
 }
@@ -1385,7 +1387,7 @@ function aukit.wav(data)
         local size
         temp, size, pos = str_unpack("<c4I", data, pos)
         if temp == "fmt " then
-            local chunk = data:sub(pos, pos + size - 1)
+            local chunk = str_sub(data, pos, pos + size - 1)
             pos = pos + size
             local format
             format, channels, sampleRate, blockAlign, bitDepth = str_unpack("<HHIxxxxHH", chunk)
@@ -1410,12 +1412,14 @@ function aukit.wav(data)
                 dataType = "adpcm"
             elseif format == 0xFFFE then
                 bitDepth = str_unpack("<H", chunk, 19)
-                local uuid = chunk:sub(25, 40)
+                local uuid = str_sub(chunk, 25, 40)
                 if uuid == wavExtensible.pcm then dataType = bitDepth == 8 and "unsigned" or "signed"
-                elseif uuid == wavExtensible.msadpcm then dataType = "msadpcm"
-                elseif uuid == wavExtensible.adpcm then dataType = "adpcm"
-                elseif uuid == wavExtensible.pcm_float then dataType = "float"
                 elseif uuid == wavExtensible.dfpwm then dataType = "dfpwm"
+                elseif uuid == wavExtensible.msadpcm then dataType = "msadpcm"
+                elseif uuid == wavExtensible.pcm_float then dataType = "float"
+                elseif uuid == wavExtensible.alaw then dataType = "alaw"
+                elseif uuid == wavExtensible.ulaw then dataType = "ulaw"
+                elseif uuid == wavExtensible.adpcm then dataType = "adpcm"
                 else error("unsupported WAV file", 2) end
             else error("unsupported WAV file", 2) end
         elseif temp == "data" then
@@ -1458,7 +1462,7 @@ function aukit.wav(data)
                     else
                         local predictor, index = str_unpack("<hB", data, n)
                         index = bit32_band(index, 0x0F)
-                        blocks[#blocks+1] = aukit.adpcm(data:sub(n + 4, n + blockAlign - 1), channels, sampleRate, false, false, predictor, index)
+                        blocks[#blocks+1] = aukit.adpcm(str_sub(data, n + 4, n + blockAlign - 1), channels, sampleRate, false, false, predictor, index)
                     end
                 end
                 obj = blocks[1]:concat(table_unpack(blocks, 2))
@@ -1488,17 +1492,19 @@ function aukit.wav(data)
     error("invalid WAV file", 2)
 end
 
---- Creates a new audio object from an AIFF file.
+--- Creates a new audio object from an AIFF or AIFC file.
 -- @tparam string data The AIFF data to load
 -- @treturn Audio A new audio object with the contents of the AIFF file
 function aukit.aiff(data)
     expect(1, data, "string")
-    local channels, sampleRate, bitDepth, length, offset
+    local channels, sampleRate, bitDepth, length, offset, compression, blockAlign
+    local isAIFC = false
     local temp, pos = str_unpack("c4", data)
     if temp ~= "FORM" then error("bad argument #1 (not an AIFF file)", 2) end
     pos = pos + 4
     temp, pos = str_unpack("c4", data, pos)
-    if temp ~= "AIFF" then error("bad argument #1 (not an AIFF file)", 2) end
+    if temp == "AIFC" then isAIFC = true
+    elseif temp ~= "AIFF" then error("bad argument #1 (not an AIFF file)", 2) end
     local meta = {}
     while pos <= #data do
         local size
@@ -1506,28 +1512,38 @@ function aukit.aiff(data)
         if temp == "COMM" then
             local e, m
             channels, length, bitDepth, e, m, pos = str_unpack(">hIhHI7x", data, pos)
+            if isAIFC then
+                local s
+                compression, s, pos = str_unpack(">c4s1", data, pos)
+                if #s % 2 == 0 then pos = pos + 1 end
+            end
             length = length * channels * math_floor(bitDepth / 8)
             local s = bit32_btest(e, 0x8000)
             e = ((bit32_band(e, 0x7FFF) - 0x3FFE) % 0x800)
             sampleRate = math.ldexp(m * (s and -1 or 1) / 0x100000000000000, e)
         elseif temp == "SSND" then
-            offset, _, pos = str_unpack(">II", data, pos)
-            local data = data:sub(pos + offset, pos + offset + length - 1)
+            offset, blockAlign, pos = str_unpack(">II", data, pos)
+            local data = str_sub(data, pos + offset, pos + offset + length - 1)
             if #data < length then error("invalid AIFF file", 2) end
-            local obj = aukit.pcm(data, bitDepth, "signed", channels, sampleRate, true, true)
+            local obj
+            if compression == nil or compression == "NONE" then obj = aukit.pcm(data, bitDepth, "signed", channels, sampleRate, true, true)
+            elseif compression == "sowt" then obj = aukit.pcm(data, bitDepth, "signed", channels, sampleRate, true, false)
+            elseif compression == "fl32" or compression == "FL32" then obj = aukit.pcm(data, 32, "float", channels, sampleRate, true, true)
+            elseif compression == "alaw" or compression == "ulaw" or compression == "ALAW" or compression == "ULAW" then obj = aukit.g711(data, compression == "ulaw" or compression == "ULAW", channels, sampleRate)
+            else error("Unsupported compression scheme " .. compression, 2) end
             obj.metadata = meta
             return obj
         elseif temp == "NAME" then
-            meta.title = data:sub(pos, pos + size - 1)
+            meta.title = str_sub(data, pos, pos + size - 1)
             pos = pos + size
         elseif temp == "AUTH" then
-            meta.artist = data:sub(pos, pos + size - 1)
+            meta.artist = str_sub(data, pos, pos + size - 1)
             pos = pos + size
         elseif temp == "(c) " then
-            meta.copyright = data:sub(pos, pos + size - 1)
+            meta.copyright = str_sub(data, pos, pos + size - 1)
             pos = pos + size
         elseif temp == "ANNO" then
-            meta.comment = data:sub(pos, pos + size - 1)
+            meta.comment = str_sub(data, pos, pos + size - 1)
             pos = pos + size
         else pos = pos + size end
     end
@@ -1541,11 +1557,13 @@ function aukit.au(data)
     expect(1, data, "string")
     local magic, offset, size, encoding, sampleRate, channels = str_unpack(">c4IIIII", data)
     if magic ~= ".snd" then error("invalid AU file", 2) end
-    if encoding == 2 then return aukit.pcm(data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 8, "signed", channels, sampleRate, true, true)
-    elseif encoding == 3 then return aukit.pcm(data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 16, "signed", channels, sampleRate, true, true)
-    elseif encoding == 4 then return aukit.pcm(data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 24, "signed", channels, sampleRate, true, true)
-    elseif encoding == 5 then return aukit.pcm(data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 32, "signed", channels, sampleRate, true, true)
-    elseif encoding == 6 then return aukit.pcm(data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 32, "float", channels, sampleRate, true, true)
+    if encoding == 1 then return aukit.g711(str_sub(data, offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), true, channels, sampleRate)
+    elseif encoding == 2 then return aukit.pcm(str_sub(data, offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 8, "signed", channels, sampleRate, true, true)
+    elseif encoding == 3 then return aukit.pcm(str_sub(data, offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 16, "signed", channels, sampleRate, true, true)
+    elseif encoding == 4 then return aukit.pcm(str_sub(data, offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 24, "signed", channels, sampleRate, true, true)
+    elseif encoding == 5 then return aukit.pcm(str_sub(data, offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 32, "signed", channels, sampleRate, true, true)
+    elseif encoding == 6 then return aukit.pcm(str_sub(data, offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 32, "float", channels, sampleRate, true, true)
+    elseif encoding == 27 then return aukit.g711(str_sub(data, offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), false, channels, sampleRate)
     else error("unsupported encoding type " .. encoding, 2) end
 end
 
@@ -1649,7 +1667,7 @@ function aukit.pack(data, bitDepth, dataType, bigEndian)
     if dataType == "float" and bitDepth ~= 32 then error("bad argument #2 (float audio must have 32-bit depth)", 2) end
     local byteDepth = bitDepth / 8
     local format = (bigEndian and ">" or "<") .. (dataType == "float" and "f" or ((dataType == "signed" and "i" or "I") .. byteDepth))
-    local formatChunk = format:sub(1, 1) .. format:sub(2):rep(512)
+    local formatChunk = str_sub(format, 1, 1) .. str_sub(format, 2):rep(512)
     local retval = ""
     for i = 1, #data, 512 do
         if #data < i + 512 then retval = retval .. str_pack(str_rep(format, #data % 512), table_unpack(data, i, #data))
@@ -1796,7 +1814,7 @@ local datafmts = {
 function aukit.detect(data)
     expect(1, data, "string")
     if data:match "^RIFF....WAVE" then return "wav"
-    elseif data:match "^FORM....AIFF" then return "aiff"
+    elseif data:match "^FORM....AIF[FC]" then return "aiff"
     elseif data:match "^%.snd" then return "au"
     elseif data:match "^fLaC" then return "flac"
     else
@@ -2088,7 +2106,7 @@ function aukit.stream.dfpwm(data, sampleRate, channels, mono)
         local d
         if isstr then
             if pos > #data then return nil end
-            d = data:sub(pos, pos + 6000 * channels)
+            d = str_sub(data, pos, pos + 6000 * channels)
         else
             while #buf < sampleRate / 8 * channels do
                 local chunk = data()
@@ -2098,8 +2116,8 @@ function aukit.stream.dfpwm(data, sampleRate, channels, mono)
                 end
                 buf = buf .. chunk
             end
-            d = buf:sub(1, 6000 * channels)
-            buf = buf:sub(6000 * channels + 1)
+            d = str_sub(buf, 1, 6000 * channels)
+            buf = str_sub(buf, 6000 * channels + 1)
         end
         local audio = decoder(d)
         if audio == nil or #audio == 0 then return nil end
@@ -2296,9 +2314,9 @@ function aukit.stream.msadpcm(input, blockAlign, channels, sampleRate, mono, coe
 end
 
 --- Returns an iterator to stream data from IMA ADPCM data. Audio will
--- automatically be resampled to 48 kHz. Data *must* be in the interleaving
--- format used in WAV files (i.e. periodic blocks with 4/8-byte headers,
--- channels alternating every 4 bytes, lower nibble first).
+-- automatically be resampled to 48 kHz, and mixed to mono if desired. Data
+-- *must* be in the interleaving format used in WAV files (i.e. periodic blocks
+-- with 4/8-byte headers, channels alternating every 4 bytes, lower nibble first).
 -- @tparam string|function():string input The audio data as a raw string or
 -- reader function
 -- @tparam number blockAlign The number of bytes in each block
@@ -2336,7 +2354,7 @@ function aukit.stream.adpcm(input, blockAlign, channels, sampleRate, mono)
         if isfunc and target > #data then
             pos = pos + n - 1
             target = target - n + 1
-            data = data:sub(n)
+            data = str_sub(data, n)
             n = 1
             while #data < target do
                 local d = input()
@@ -2394,6 +2412,84 @@ function aukit.stream.adpcm(input, blockAlign, channels, sampleRate, mono)
     end, not isfunc and #data / blockAlign * samplesPerBlock / sampleRate or nil
 end
 
+--- Returns an iterator to stream data from u-law/A-law G.711 data. Audio will
+-- automatically be resampled to 48 kHz, and mixed to mono if desired.
+-- @tparam string|function():string input The audio data as a raw string or
+-- reader function
+-- @tparam boolean ulaw Whether the audio uses u-law (true) or A-law (false).
+-- @tparam[opt=1] number channels The number of channels present in the audio
+-- @tparam[opt=8000] number sampleRate The sample rate of the audio in Hertz
+-- @tparam[opt=false] boolean mono Whether to mix the audio down to mono
+-- @treturn function():{{[number]...}...},number An iterator function that returns
+-- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
+-- the current position of the audio in seconds
+-- @treturn number|nil The total length of the audio in seconds, or nil if data
+-- is a function
+function aukit.stream.g711(input, ulaw, channels, sampleRate, mono)
+    expect(1, input, "string", "function")
+    expect(2, ulaw, "boolean")
+    channels = expect(3, channels, "number", "nil") or 1
+    sampleRate = expect(4, sampleRate, "number", "nil") or 8000
+    expect(5, mono, "boolean", "nil")
+    local csize = jit and 7680 or 32768
+    local xor = ulaw and 0xFF or 0x55
+    local isfunc = type(input) == "function"
+    local buf, pos = "", 1
+    local ratio = 48000 / sampleRate
+    local interp = interpolate[aukit.defaultInterpolation]
+    local last
+    return function()
+        local lp = pos
+        local retval = {}
+        for i = 1, channels do retval[i] = {} end
+        if last then for i = 1, channels do for j = 1, #last[i] do retval[j-#last[i]-1] = last[i][j] end end end
+        local data
+        if isfunc then
+            while #buf < sampleRate * channels do
+                local d = input()
+                if not input then
+                    if #buf == 0 then return nil
+                    else break end
+                end
+                buf = buf .. d
+            end
+            data = str_sub(buf, 1, sampleRate * channels)
+            buf = str_sub(buf, sampleRate * channels + 1)
+        else data = str_sub(input, pos, pos + sampleRate * channels - 1) end
+        pos = pos + sampleRate * channels
+        local start = os_epoch "utc"
+        for i = 1, #data, csize do
+            local bytes = {str_byte(data, i, i + csize - 1)}
+            for j = 1, #bytes do
+                local b = bit32_bxor(bytes[j], xor)
+                local m, e = bit32_band(b, 0x0F), bit32_extract(b, 4, 3)
+                if not ulaw and e == 0 then m = m * 4 + 2
+                else m = bit32_lshift(m * 2 + 33, e) end
+                if ulaw then m = m - 33 end
+                retval[(i+j-2) % channels + 1][math_floor((i+j-2) / channels + 1)] = m / (bit32_btest(b, 0x80) == ulaw and -0x40 or 0x40)
+            end
+            if os_epoch "utc" - start > 3000 then start = os_epoch "utc" sleep(0) end
+        end
+        last = {}
+        for j = 1, channels do last[j] = {} for i = 1, sincWindowSize do last[j][i] = retval[j][#retval[j]-30+i] end end
+        local newlen = math_floor(#retval[1] * ratio)
+        local resamp = {}
+        for j = 1, channels do resamp[j] = {} end
+        for i = 1, newlen do
+            local x = (i - 1) / ratio + 1
+            local c = {}
+            if x % 1 == 0 then for j = 1, channels do c[j] = retval[j][x] end
+            else for j = 1, channels do c[j] = interp(retval[j], x) end end
+            if mono then
+                local n = 0
+                for j = 1, channels do n = n + c[j] end
+                resamp[1][i] = clamp(math_floor(n / channels), -128, 127)
+            else for j = 1, channels do resamp[j][i] = clamp(math_floor(c[j]), -128, 127) end end
+        end
+        return resamp, (lp - 1) / sampleRate / channels
+    end, not isfunc and #input / sampleRate / channels or nil
+end
+
 --- Returns an iterator to stream audio from a WAV file. Audio will automatically
 -- be resampled to 48 kHz, and optionally mixed down to mono. This accepts PCM
 -- files up to 32 bits, including float data, as well as DFPWM files [as specified here](https://gist.github.com/MCJack123/90c24b64c8e626c7f130b57e9800962c).
@@ -2421,7 +2517,7 @@ function aukit.stream.wav(data, mono, ignoreHeader)
         temp, pos = str_unpack("c4", data, pos)
         size, pos = str_unpack("<I", data, pos)
         if temp == "fmt " then
-            local chunk = data:sub(pos, pos + size - 1)
+            local chunk = str_sub(data, pos, pos + size - 1)
             pos = pos + size
             local format
             format, channels, sampleRate, blockAlign, bitDepth = str_unpack("<HHIxxxxHH", chunk)
@@ -2438,20 +2534,26 @@ function aukit.stream.wav(data, mono, ignoreHeader)
                 end
             elseif format == 3 then
                 dataType = "float"
+            elseif format == 6 then
+                dataType = "alaw"
+            elseif format == 7 then
+                dataType = "ulaw"
             elseif format == 0x11 then
                 dataType = "adpcm"
             elseif format == 0xFFFE then
                 bitDepth = str_unpack("<H", chunk, 19)
-                local uuid = chunk:sub(25, 40)
+                local uuid = str_sub(chunk, 25, 40)
                 if uuid == wavExtensible.pcm then dataType = bitDepth == 8 and "unsigned" or "signed"
-                elseif uuid == wavExtensible.adpcm then dataType = "adpcm"
+                elseif uuid == wavExtensible.dfpwm then dataType = "dfpwm"
                 elseif uuid == wavExtensible.msadpcm then dataType = "msadpcm"
                 elseif uuid == wavExtensible.pcm_float then dataType = "float"
-                elseif uuid == wavExtensible.dfpwm then dataType = "dfpwm"
+                elseif uuid == wavExtensible.alaw then dataType = "alaw"
+                elseif uuid == wavExtensible.ulaw then dataType = "ulaw"
+                elseif uuid == wavExtensible.adpcm then dataType = "adpcm"
                 else error("unsupported WAV file", 2) end
             else error("unsupported WAV file", 2) end
         elseif temp == "data" then
-            local data = data:sub(pos, pos + size - 1)
+            local data = str_sub(data, pos, pos + size - 1)
             if not fn and #data < size then error("invalid WAV file", 2) end
             if fn then
                 local first, f = data
@@ -2460,7 +2562,7 @@ function aukit.stream.wav(data, mono, ignoreHeader)
                     elseif ignoreHeader then
                         local d = fn()
                         if not d then return nil end
-                        if d:match "^RIFF....WAVE" then return d:sub(d:match("^RIFF....WAVE.?data....()"))
+                        if d:match "^RIFF....WAVE" then return str_sub(d, d:match("^RIFF....WAVE.?data....()"))
                         else return d end
                     else return fn() end
                 end
@@ -2468,6 +2570,7 @@ function aukit.stream.wav(data, mono, ignoreHeader)
             if dataType == "adpcm" then return aukit.stream.adpcm(data, blockAlign, channels, sampleRate, mono)
             elseif dataType == "msadpcm" then return aukit.stream.msadpcm(data, blockAlign, channels, sampleRate, mono, coefficients)
             elseif dataType == "dfpwm" then return aukit.stream.dfpwm(data, sampleRate, channels, mono), size / channels / (bitDepth / 8) / sampleRate
+            elseif dataType == "alaw" or dataType == "ulaw" then return aukit.stream.g711(data, dataType == "ulaw", channels, sampleRate, mono)
             else return aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, false, mono), size / channels / (bitDepth / 8) / sampleRate end
         elseif temp == "fact" then
             -- TODO
@@ -2477,7 +2580,7 @@ function aukit.stream.wav(data, mono, ignoreHeader)
     error("invalid WAV file", 2)
 end
 
---- Returns an iterator to stream audio from an AIFF file. Audio will
+--- Returns an iterator to stream audio from an AIFF or AIFC file. Audio will
 -- automatically be resampled to 48 kHz, and optionally mixed down to mono.
 -- @tparam string|function():string data The AIFF file to decode, or a function
 -- returning chunks to decode (the first chunk MUST contain the ENTIRE header)
@@ -2493,12 +2596,14 @@ function aukit.stream.aiff(data, mono, ignoreHeader)
     if type(data) == "function" then fn, data = data, data() end
     expect(1, data, "string")
     expect(2, mono, "boolean", "nil")
-    local channels, sampleRate, bitDepth, length, offset
+    local channels, sampleRate, bitDepth, length, offset, compression, blockAlign
+    local isAIFC = false
     local temp, pos = str_unpack("c4", data)
     if temp ~= "FORM" then error("bad argument #1 (not an AIFF file)", 2) end
     pos = pos + 4
     temp, pos = str_unpack("c4", data, pos)
-    if temp ~= "AIFF" then error("bad argument #1 (not an AIFF file)", 2) end
+    if temp == "AIFC" then isAIFC = true
+    elseif temp ~= "AIFF" then error("bad argument #1 (not an AIFF file)", 2) end
     while pos <= #data do
         local size
         temp, pos = str_unpack("c4", data, pos)
@@ -2506,13 +2611,18 @@ function aukit.stream.aiff(data, mono, ignoreHeader)
         if temp == "COMM" then
             local e, m
             channels, length, bitDepth, e, m, pos = str_unpack(">hIhHI7x", data, pos)
+            if isAIFC then
+                local s
+                compression, s, pos = str_unpack(">c4s1", data, pos)
+                if #s % 2 == 0 then pos = pos + 1 end
+            end
             length = length * channels * math_floor(bitDepth / 8)
             local s = bit32_btest(e, 0x8000)
             e = ((bit32_band(e, 0x7FFF) - 0x3FFE) % 0x800)
             sampleRate = math.ldexp(m * (s and -1 or 1) / 0x100000000000000, e)
         elseif temp == "SSND" then
-            offset, _, pos = str_unpack(">II", data, pos)
-            local data = data:sub(pos + offset, pos + offset + length - 1)
+            offset, blockAlign, pos = str_unpack(">II", data, pos)
+            local data = str_sub(data, pos + offset, pos + offset + length - 1)
             if not fn and #data < length then error("invalid AIFF file", 2) end
             if fn then
                 local first, f = data
@@ -2521,14 +2631,19 @@ function aukit.stream.aiff(data, mono, ignoreHeader)
                     elseif ignoreHeader then
                         local d = fn()
                         if not d then return nil end
-                        if d:match "^FORM....AIFF" then
-                            local n, p = d:match("^FORM....AIFF.?SSND(....)....()")
+                        if d:match "^FORM....AIF[FC]" then
+                            local n, p = d:match("^FORM....AIF[FC].-SSND(....)....()")
                             offset = str_unpack(">I", n)
-                            return d:sub(p + offset)
+                            return str_sub(d, p + offset)
                         else return d end
                     else return fn() end
                 end
             end
+            if compression == nil or compression == "NONE" then return aukit.stream.pcm(data, bitDepth, "signed", channels, sampleRate, true, mono), length / channels / (bitDepth / 8) / sampleRate
+            elseif compression == "sowt" then return aukit.stream.pcm(data, bitDepth, "signed", channels, sampleRate, true, mono), length / channels / (bitDepth / 8) / sampleRate
+            elseif compression == "fl32" or compression == "FL32" then return aukit.stream.pcm(data, 32, "float", channels, sampleRate, true, mono), length / channels / 4 / sampleRate
+            elseif compression == "alaw" or compression == "ulaw" or compression == "ALAW" or compression == "ULAW" then return aukit.stream.g711(data, compression == "ulaw" or compression == "ULAW", channels, sampleRate, mono), length / channels / sampleRate
+            else error("Unsupported compression scheme " .. compression, 2) end
             return aukit.stream.pcm(data, bitDepth, "signed", channels, sampleRate, true, mono), length / channels / (bitDepth / 8) / sampleRate
         else pos = pos + size end
     end
@@ -2554,22 +2669,24 @@ function aukit.stream.au(data, mono, ignoreHeader)
     local magic, offset, size, encoding, sampleRate, channels = str_unpack(">c4IIIII", data)
     if magic ~= ".snd" then error("invalid AU file", 2) end
     if fn then
-        local first, f = data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), nil
+        local first, f = str_sub(data, offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), nil
         data = function()
             if first then f, first = first return f
             elseif ignoreHeader then
                 local d = fn()
                 if not d then return nil end
-                if d:match "^.snd" then return d:sub(str_unpack(">I", d:sub(5, 8)), nil)
+                if d:match "^.snd" then return str_sub(d, str_unpack(">I", str_sub(d, 5, 8)), nil)
                 else return d end
             else return fn() end
         end
-    else data = data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil) end
-    if encoding == 2 then return aukit.stream.pcm(data, 8, "signed", channels, sampleRate, true, mono), size / channels / sampleRate
+    else data = str_sub(data, offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil) end
+    if encoding == 1 then return aukit.stream.g711(data, true, channels, sampleRate, mono), size / channels / sampleRate
+    elseif encoding == 2 then return aukit.stream.pcm(data, 8, "signed", channels, sampleRate, true, mono), size / channels / sampleRate
     elseif encoding == 3 then return aukit.stream.pcm(data, 16, "signed", channels, sampleRate, true, mono), size / channels / 2 / sampleRate
     elseif encoding == 4 then return aukit.stream.pcm(data, 24, "signed", channels, sampleRate, true, mono), size / channels / 3 / sampleRate
     elseif encoding == 5 then return aukit.stream.pcm(data, 32, "signed", channels, sampleRate, true, mono), size / channels / 4 / sampleRate
     elseif encoding == 6 then return aukit.stream.pcm(data, 32, "float", channels, sampleRate, true, mono), size / channels / 4 / sampleRate
+    elseif encoding == 27 then return aukit.stream.g711(data, false, channels, sampleRate, mono), size / channels / sampleRate
     else error("unsupported encoding type " .. encoding, 2) end
 end
 
@@ -2807,7 +2924,7 @@ function aukit.effects.trim(audio, threshold)
         for c = 1, #audio.data do if math_abs(audio.data[c][i]) > threshold then e = i break end end
         if e then break end
     end
-    local new = audio:sub(s / audio.sampleRate, e / audio.sampleRate)
+    local new = str_sub(audio, s / audio.sampleRate, e / audio.sampleRate)
     audio.data = new.data
     return audio
 end

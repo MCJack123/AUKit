@@ -7,13 +7,18 @@ All sample rates and channel counts are supported. Functions to convert to Compu
 - Raw linear PCM, 32-bit floating point little/big endian
 - Raw DFPWM
 - Raw Microsoft ADPCM
-- Raw IMA ADPCM (no streaming)
+- Raw IMA ADPCM
+- Raw G.711, A-law or µ-law
 - WAV, PCM, 8-bit, 16-bit, 24-bit, 32-bit, or float
 - WAV, DFPWM
 - WAV, Microsoft ADPCM
 - WAV, IMA ADPCM
-- AIFF, PCM
+- WAV, G.711, A-law or µ-law
+- AIFF, PCM, 8-bit, 16-bit, 24-bit, or 32-bit
+- AIFC, PCM, 32-bit float
+- AIFC, G.711, A-law or µ-law
 - AU, PCM, 8-bit, 16-bit, 24-bit, 32-bit, or float
+- AU, G.711, A-law or µ-law
 - FLAC, 8-bit, 16-bit, 24-bit, or 32-bit
 
 ## Usage
