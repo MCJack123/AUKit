@@ -89,9 +89,9 @@ local dfpwm = require "cc.audio.dfpwm"
 
 local bit32_band, bit32_bxor, bit32_lshift, bit32_rshift, bit32_btest, bit32_extract = bit32.band, bit32.bxor, bit32.lshift, bit32.rshift, bit32.btest, bit32.extract
 local math_floor, math_ceil, math_sin, math_abs, math_fmod, math_min, math_max, math_pi = math.floor, math.ceil, math.sin, math.abs, math.fmod, math.min, math.max, math.pi
-local os_epoch = os.epoch
+local os_epoch, os_queueEvent, os_pullEvent = os.epoch, os.queueEvent, os.pullEvent
 local str_pack, str_unpack, str_sub, str_byte, str_rep = string.pack, string.unpack, string.sub, string.byte, string.rep
-local table_unpack = table.unpack
+local table_pack, table_unpack, table_insert, table_remove = table.pack, table.unpack, table.insert, table.remove
 
 local aukit = setmetatable({}, {__call = function(aukit, path)
     expect(1, path, "string")
@@ -104,7 +104,7 @@ end})
 aukit.effects, aukit.stream = {}, {}
 
 --- @tfield string _VERSION The version of AUKit that is loaded. This follows [SemVer](https://semver.org) format.
-aukit._VERSION = "1.6.0"
+aukit._VERSION = "1.6.1"
 
 --- @tfield "none"|"linear"|"cubic"|"sinc" defaultInterpolation Default interpolation mode for @{Audio:resample} and other functions that need to resample.
 aukit.defaultInterpolation = "linear"
@@ -223,7 +223,11 @@ local function utf8decode(str, pos)
     return string.char(table_unpack(codes)), pos
 end
 
-local function clamp(n, min, max) return math.max(math.min(n, max), min) end
+local function clamp(n, min, max)
+    if n < min then return min
+    elseif n > max then return max
+    else return n end
+end
 
 local function expectAudio(n, var)
     if type(var) == "table" and getmetatable(var) == Audio_mt then return var end
@@ -238,8 +242,8 @@ end
 
 local function intunpack(str, pos, sz, signed, be)
     local n = 0
-    if be then for i = 0, sz - 1 do n = n * 256 + str:byte(pos+i) end
-    else for i = 0, sz - 1 do n = n + str:byte(pos+i) * 2^(8*i) end end
+    if be then for i = 0, sz - 1 do n = n * 256 + str_byte(str, pos+i) end
+    else for i = 0, sz - 1 do n = n + str_byte(str, pos+i) * 2^(8*i) end end
     if signed and n >= 2^(sz*8-1) then n = n - 2^(sz*8) end
     return n, pos + sz
 end
@@ -570,25 +574,25 @@ local decodeFLAC do
         local last = false
         local meta = {}
         while not last do
-            temp, pos = inp:byte(pos), pos + 1
+            temp, pos = str_byte(inp, pos), pos + 1
             last = bit32_btest(temp, 0x80)
             local type = bit32_band(temp, 0x7F);
             local length length, pos = intunpack(inp, pos, 3, false, true)
             if type == 0 then  -- Stream info block
                 pos = pos + 10
                 sampleRate, pos = intunpack(inp, pos, 2, false, true)
-                sampleRate = sampleRate * 16 + bit32_rshift(inp:byte(pos), 4)
-                numChannels = bit32_band(bit32_rshift(inp:byte(pos), 1), 7) + 1;
-                sampleDepth = bit32_band(inp:byte(pos), 1) * 16 + bit32_rshift(inp:byte(pos+1), 4) + 1;
+                sampleRate = sampleRate * 16 + bit32_rshift(str_byte(inp, pos), 4)
+                numChannels = bit32_band(bit32_rshift(str_byte(inp, pos), 1), 7) + 1;
+                sampleDepth = bit32_band(str_byte(inp, pos), 1) * 16 + bit32_rshift(str_byte(inp, pos+1), 4) + 1;
                 numSamples, pos = intunpack(inp, pos + 2, 4, false, true)
-                numSamples = numSamples + bit32_band(inp:byte(pos-5), 15) * 2^32
+                numSamples = numSamples + bit32_band(str_byte(inp, pos-5), 15) * 2^32
                 pos = pos + 16
             elseif type == 4 then
                 local ncomments
-                meta.vendor, ncomments, pos = ("<s4I4"):unpack(inp, pos)
+                meta.vendor, ncomments, pos = str_unpack("<s4I4", inp, pos)
                 for i = 1, ncomments do
                     local str
-                    str, pos = utf8decode(("<s4"):unpack(inp, pos))
+                    str, pos = utf8decode(str_unpack("<s4", inp, pos))
                     local k, v = str:match "^([^=]+)=(.*)$"
                     if k then meta[flacMetadata[k:lower()] or k:lower()] = v end
                 end
@@ -689,7 +693,7 @@ function Audio:concat(...)
         expectAudio(i-1, audios[i])
         if audios[i].sampleRate ~= self.sampleRate then audios[i] = audios[i]:resample(self.sampleRate) end
         l[i] = #audios[i].data[1]
-        cn = math.max(cn, #audios[i].data)
+        cn = math_max(cn, #audios[i].data)
     end
     local obj = setmetatable({sampleRate = self.sampleRate, data = {}, metadata = copy(self.metadata), info = copy(self.info)}, Audio_mt)
     for c = 1, cn do
@@ -742,7 +746,7 @@ function Audio:combine(...)
     for i = 2, #audios do
         expectAudio(i-1, audios[i])
         if audios[i].sampleRate ~= self.sampleRate then audios[i] = audios[i]:resample(self.sampleRate) end
-        len = math.max(len, #audios[i].data[1])
+        len = math_max(len, #audios[i].data[1])
     end
     local obj = setmetatable({sampleRate = self.sampleRate, data = {}, metadata = copy(self.metadata), info = copy(self.info)}, Audio_mt)
     local pos = 0
@@ -796,15 +800,15 @@ function Audio:mix(amplifier, ...)
     for i = 2, #audios do
         expectAudio(i, audios[i])
         if audios[i].sampleRate ~= self.sampleRate then audios[i] = audios[i]:resample(self.sampleRate) end
-        len = math.max(len, #audios[i].data[1])
-        cn = math.max(cn, #audios[i].data)
+        len = math_max(len, #audios[i].data[1])
+        cn = math_max(cn, #audios[i].data)
     end
     if type(amplifier) ~= "number" then
         expectAudio(1, amplifier)
         if amplifier.sampleRate ~= self.sampleRate then amplifier = amplifier:resample(self.sampleRate) end
-        len = math.max(len, #amplifier.data[1])
-        cn = math.max(cn, #amplifier.data)
-        table.insert(audios, 2, amplifier)
+        len = math_max(len, #amplifier.data[1])
+        cn = math_max(cn, #amplifier.data)
+        table_insert(audios, 2, amplifier)
         amplifier = 1
     end
     local obj = setmetatable({sampleRate = self.sampleRate, data = {}, metadata = copy(self.metadata), info = copy(self.info)}, Audio_mt)
@@ -919,7 +923,7 @@ function Audio:stream(chunkSize, bitDepth, dataType)
         local p = pos / self.sampleRate
         local v = {encodePCM(info, pos)}
         if v[1] == nil then info = nil return nil end
-        pos = table.remove(v, 1)
+        pos = table_remove(v, 1)
         return v, p
     end, #self.data[1] / self.sampleRate
 end
@@ -932,7 +936,7 @@ function Audio:wav(bitDepth)
     bitDepth = expect(1, bitDepth, "number", "nil") or 16
     if bitDepth == 1 then
         local str = self:dfpwm(true)
-        return ("<c4Ic4c4IHHIIHHHHIc16c4IIc4I"):pack(
+        return str_pack("<c4Ic4c4IHHIIHHHHIc16c4IIc4I",
             "RIFF", #str + 72, "WAVE",
             "fmt ", 40, 0xFFFE, #self.data, self.sampleRate, self.sampleRate * #self.data / 8, math_ceil(#self.data / 8), 1,
                 22, 1, wavExtensibleChannels[#self.data] or 0, wavExtensible.dfpwm,
@@ -945,7 +949,7 @@ function Audio:wav(bitDepth)
     local format = ((bitDepth == 8 and "I" or "i") .. (bitDepth / 8)):rep(csize)
     for i = 1, #data - csize, csize do str = str .. format:pack(table_unpack(data, i, i + csize - 1)) end
     str = str .. ((bitDepth == 8 and "I" or "i") .. (bitDepth / 8)):rep(#data % csize):pack(table_unpack(data, math_floor(#data / csize) * csize))
-    return ("<c4Ic4c4IHHIIHHc4I"):pack("RIFF", #str + 36, "WAVE", "fmt ", 16, 1, #self.data, self.sampleRate, self.sampleRate * #self.data * bitDepth / 8, #self.data * bitDepth / 8, bitDepth, "data", #str) .. str
+    return str_pack("<c4Ic4c4IHHIIHHc4I", "RIFF", #str + 36, "WAVE", "fmt ", 16, 1, #self.data, self.sampleRate, self.sampleRate * #self.data * bitDepth / 8, #self.data * bitDepth / 8, bitDepth, "data", #str) .. str
 end
 
 --- Converts the audio data to DFPWM. All channels share the same encoder, and
@@ -1213,7 +1217,7 @@ function aukit.adpcm(data, channels, sampleRate, topFirst, interleaved, predicto
             local nibble = read()
             step = ima_step_table[step_index]
             step_index = clamp(step_index + ima_index_table[nibble], 0, 88)
-            local diff = bit32_rshift((nibble % 8) * step, 2) + bit32.rshift(step, 3)
+            local diff = bit32_rshift((nibble % 8) * step, 2) + bit32_rshift(step, 3)
             if nibble >= 8 then predictor = clamp(predictor - diff, -32768, 32767)
             else predictor = clamp(predictor + diff, -32768, 32767) end
             line[i] = predictor / (predictor < 0 and 32768 or 32767)
@@ -1257,14 +1261,14 @@ function aukit.msadpcm(data, blockAlign, channels, sampleRate, coefficients)
     local start = os_epoch "utc"
     for n = 1, #data, blockAlign do
         if channels == 2 then
-            local predictorIndexL, predictorIndexR, deltaL, deltaR, sample1L, sample1R, sample2L, sample2R = ("<BBhhhhhh"):unpack(data, n)
+            local predictorIndexL, predictorIndexR, deltaL, deltaR, sample1L, sample1R, sample2L, sample2R = str_unpack("<BBhhhhhh", data, n)
             local c1L, c2L, c1R, c2R = coeff1[predictorIndexL], coeff2[predictorIndexL], coeff1[predictorIndexR], coeff2[predictorIndexR]
             left[#left+1] = sample2L / (sample2L < 0 and 32768 or 32767)
             left[#left+1] = sample1L / (sample1L < 0 and 32768 or 32767)
             right[#right+1] = sample2R / (sample2R < 0 and 32768 or 32767)
             right[#right+1] = sample1R / (sample1R < 0 and 32768 or 32767)
             for i = 14, blockAlign - 1 do
-                local b = data:byte(n+i)
+                local b = str_byte(data, n+i)
                 local hi, lo = bit32_rshift(b, 4), bit32_band(b, 0x0F)
                 if hi >= 8 then hi = hi - 16 end
                 if lo >= 8 then lo = lo - 16 end
@@ -1278,12 +1282,12 @@ function aukit.msadpcm(data, blockAlign, channels, sampleRate, coefficients)
                 deltaR = math_max(math_floor(msadpcm_adaption_table[lo] * deltaR / 256), 16)
             end
         elseif channels == 1 then
-            local predictorIndex, delta, sample1, sample2 = ("<!1Bhhh"):unpack(data)
+            local predictorIndex, delta, sample1, sample2 = str_unpack("<!1Bhhh", data)
             local c1, c2 = coeff1[predictorIndex], coeff2[predictorIndex]
             left[#left+1] = sample2 / (sample2 < 0 and 32768 or 32767)
             left[#left+1] = sample1 / (sample1 < 0 and 32768 or 32767)
             for i = 7, blockAlign - 1 do
-                local b = data:byte(n+i)
+                local b = str_byte(data, n+i)
                 local hi, lo = bit32_rshift(b, 4), bit32_band(b, 0x0F)
                 if hi >= 8 then hi = hi - 16 end
                 if lo >= 8 then lo = lo - 16 end
@@ -1371,29 +1375,29 @@ end
 function aukit.wav(data)
     expect(1, data, "string")
     local channels, sampleRate, bitDepth, length, dataType, blockAlign, coefficients
-    local temp, pos = ("c4"):unpack(data)
+    local temp, pos = str_unpack("c4", data)
     if temp ~= "RIFF" then error("bad argument #1 (not a WAV file)", 2) end
     pos = pos + 4
-    temp, pos = ("c4"):unpack(data, pos)
+    temp, pos = str_unpack("c4", data, pos)
     if temp ~= "WAVE" then error("bad argument #1 (not a WAV file)", 2) end
     local meta = {}
     while pos <= #data do
         local size
-        temp, size, pos = ("<c4I"):unpack(data, pos)
+        temp, size, pos = str_unpack("<c4I", data, pos)
         if temp == "fmt " then
             local chunk = data:sub(pos, pos + size - 1)
             pos = pos + size
             local format
-            format, channels, sampleRate, blockAlign, bitDepth = ("<HHIxxxxHH"):unpack(chunk)
+            format, channels, sampleRate, blockAlign, bitDepth = str_unpack("<HHIxxxxHH", chunk)
             if format == 1 then
                 dataType = bitDepth == 8 and "unsigned" or "signed"
             elseif format == 2 then
                 dataType = "msadpcm"
-                local numcoeff = ("<H"):unpack(chunk, 21)
+                local numcoeff = str_unpack("<H", chunk, 21)
                 if numcoeff > 0 then
                     coefficients = {{}, {}}
                     for i = 1, numcoeff do
-                        coefficients[1][i], coefficients[2][i] = ("<hh"):unpack(chunk, i * 4 + 19)
+                        coefficients[1][i], coefficients[2][i] = str_unpack("<hh", chunk, i * 4 + 19)
                     end
                 end
             elseif format == 3 then
@@ -1405,7 +1409,7 @@ function aukit.wav(data)
             elseif format == 0x11 then
                 dataType = "adpcm"
             elseif format == 0xFFFE then
-                bitDepth = ("<H"):unpack(chunk, 19)
+                bitDepth = str_unpack("<H", chunk, 19)
                 local uuid = chunk:sub(25, 40)
                 if uuid == wavExtensible.pcm then dataType = bitDepth == 8 and "unsigned" or "signed"
                 elseif uuid == wavExtensible.msadpcm then dataType = "msadpcm"
@@ -1422,7 +1426,7 @@ function aukit.wav(data)
                 local blocks = {}
                 for n = 1, #data, blockAlign do
                     if channels == 2 then
-                        local predictorL, indexL, predictorR, indexR = ("<hBxhB"):unpack(data, n)
+                        local predictorL, indexL, predictorR, indexR = str_unpack("<hBxhB", data, n)
                         local nibbles = {}
                         for i = 8, blockAlign - 1, 8 do
                             local b = str_byte(data, n+i)
@@ -1452,12 +1456,12 @@ function aukit.wav(data)
                         end
                         blocks[#blocks+1] = aukit.adpcm(nibbles, channels, sampleRate, false, true, {predictorL, predictorR}, {indexL, indexR})
                     else
-                        local predictor, index = ("<hB"):unpack(data, n)
+                        local predictor, index = str_unpack("<hB", data, n)
                         index = bit32_band(index, 0x0F)
                         blocks[#blocks+1] = aukit.adpcm(data:sub(n + 4, n + blockAlign - 1), channels, sampleRate, false, false, predictor, index)
                     end
                 end
-                obj = blocks[1]:concat(table.unpack(blocks, 2))
+                obj = blocks[1]:concat(table_unpack(blocks, 2))
             elseif dataType == "msadpcm" then obj = aukit.msadpcm(data, blockAlign, channels, sampleRate, coefficients)
             elseif dataType == "alaw" or dataType == "ulaw" then obj = aukit.g711(data, dataType == "ulaw", channels, sampleRate)
             elseif dataType == "dfpwm" then obj = aukit.dfpwm(data, channels, sampleRate)
@@ -1469,13 +1473,13 @@ function aukit.wav(data)
             -- TODO
             pos = pos + size
         elseif temp == "LIST" then
-            local type = ("c4"):unpack(data, pos)
+            local type = str_unpack("c4", data, pos)
             if type == "INFO" then
                 local e = pos + size
                 pos = pos + 4
                 while pos < e do
                     local str
-                    type, str, pos = ("!2<c4s4Xh"):unpack(data, pos)
+                    type, str, pos = str_unpack("!2<c4s4Xh", data, pos)
                     if wavMetadata[type] then meta[wavMetadata[type]] = tonumber(str) or str end
                 end
             else pos = pos + size end
@@ -1490,24 +1494,24 @@ end
 function aukit.aiff(data)
     expect(1, data, "string")
     local channels, sampleRate, bitDepth, length, offset
-    local temp, pos = ("c4"):unpack(data)
+    local temp, pos = str_unpack("c4", data)
     if temp ~= "FORM" then error("bad argument #1 (not an AIFF file)", 2) end
     pos = pos + 4
-    temp, pos = ("c4"):unpack(data, pos)
+    temp, pos = str_unpack("c4", data, pos)
     if temp ~= "AIFF" then error("bad argument #1 (not an AIFF file)", 2) end
     local meta = {}
     while pos <= #data do
         local size
-        temp, size, pos = (">c4I"):unpack(data, pos)
+        temp, size, pos = str_unpack(">c4I", data, pos)
         if temp == "COMM" then
             local e, m
-            channels, length, bitDepth, e, m, pos = (">hIhHI7x"):unpack(data, pos)
+            channels, length, bitDepth, e, m, pos = str_unpack(">hIhHI7x", data, pos)
             length = length * channels * math_floor(bitDepth / 8)
             local s = bit32_btest(e, 0x8000)
             e = ((bit32_band(e, 0x7FFF) - 0x3FFE) % 0x800)
             sampleRate = math.ldexp(m * (s and -1 or 1) / 0x100000000000000, e)
         elseif temp == "SSND" then
-            offset, _, pos = (">II"):unpack(data, pos)
+            offset, _, pos = str_unpack(">II", data, pos)
             local data = data:sub(pos + offset, pos + offset + length - 1)
             if #data < length then error("invalid AIFF file", 2) end
             local obj = aukit.pcm(data, bitDepth, "signed", channels, sampleRate, true, true)
@@ -1535,7 +1539,7 @@ end
 -- @treturn Audio A new audio object with the contents of the AU file
 function aukit.au(data)
     expect(1, data, "string")
-    local magic, offset, size, encoding, sampleRate, channels = (">c4IIIII"):unpack(data)
+    local magic, offset, size, encoding, sampleRate, channels = str_unpack(">c4IIIII", data)
     if magic ~= ".snd" then error("invalid AU file", 2) end
     if encoding == 2 then return aukit.pcm(data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 8, "signed", channels, sampleRate, true, true)
     elseif encoding == 3 then return aukit.pcm(data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), 16, "signed", channels, sampleRate, true, true)
@@ -1668,11 +1672,11 @@ function aukit.play(callback, progress, volume, ...)
     expect(3, volume, "number", "table", "nil")
     local speakers = {...}
     if type(volume) == "table" then
-        table.insert(speakers, 1, volume)
+        table_insert(speakers, 1, volume)
         volume = nil
     end
     if type(progress) == "table" then
-        table.insert(speakers, 1, progress)
+        table_insert(speakers, 1, progress)
         progress = nil
     end
     if #speakers == 0 then error("bad argument #2 (expected speakers, got nil)", 2) end
@@ -1684,30 +1688,45 @@ function aukit.play(callback, progress, volume, ...)
     end), coroutine.create(function()
         while not complete or #chunks > 0 do
             while not chunks[1] do if complete then return end coroutine.yield(speakers) end
-            local chunk = table.remove(chunks, 1)
+            local pchunk = table_remove(chunks, 1)
             local fn = {}
-            if progress then progress(chunk[2]) end
-            chunk = chunk[1]
-            for i, v in ipairs(speakers) do fn[i] = function()
-                local name = peripheral.getName(v)
-                if _HOST:find("CraftOS-PC v2.6.4") and config and not config.get("standardsMode") then
-                    v.playAudio(chunk[i] or chunk[1], volume)
-                    repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
-                else while not v.playAudio(chunk[i] or chunk[1], volume) do
-                    repeat until select(2, os.pullEvent("speaker_audio_empty")) == name
+            if progress then progress(pchunk[2]) end
+            pchunk = pchunk[1]
+            local chunklist = {}
+            if #pchunk[1] < 96000 then chunklist = {pchunk}
+            else
+                for i = 0, #pchunk[1] - 1, 48000 do
+                    local chunk = {}
+                    chunklist[#chunklist+1] = chunk
+                    for j = 1, #pchunk do
+                        local s, c = pchunk[j], {}
+                        chunk[j] = c
+                        for k = 1, 48000 do c[k] = s[k+i] end
+                    end
+                end
+            end
+            for _, chunk in ipairs(chunklist) do
+                for i, v in ipairs(speakers) do fn[i] = function()
+                    local name = peripheral.getName(v)
+                    if _HOST:find("CraftOS-PC v2.6.4") and config and not config.get("standardsMode") then
+                        v.playAudio(chunk[i] or chunk[1], volume)
+                        repeat until select(2, os_pullEvent("speaker_audio_empty")) == name
+                    else while not v.playAudio(chunk[i] or chunk[1], volume) do
+                        repeat until select(2, os_pullEvent("speaker_audio_empty")) == name
+                    end end
                 end end
-            end end
-            parallel.waitForAll(table_unpack(fn))
+                parallel.waitForAll(table_unpack(fn))
+            end
         end
     end)
     local ok, af, bf
     local aq, bq = {{}}, {{}}
     repeat
         if #aq > 0 then
-            local event = table.remove(aq, 1)
+            local event = table_remove(aq, 1)
             if af == speakers then
                 af = nil
-                table.insert(aq, 1, event)
+                table_insert(aq, 1, event)
             end
             if af == nil or event[1] == af then
                 ok, af = coroutine.resume(a, table_unpack(event, 1, event.n))
@@ -1715,10 +1734,10 @@ function aukit.play(callback, progress, volume, ...)
             end
         end
         if #bq > 0 then
-            local event = table.remove(bq, 1)
+            local event = table_remove(bq, 1)
             if bf == speakers then
                 bf = nil
-                table.insert(bq, 1, event)
+                table_insert(bq, 1, event)
             end
             if bf == nil or event[1] == bf then
                 ok, bf = coroutine.resume(b, table_unpack(event, 1, event.n))
@@ -1727,13 +1746,13 @@ function aukit.play(callback, progress, volume, ...)
         end
         if coroutine.status(b) == "suspended" and (#aq == 0 or #bq == 0) then
             if af ~= nil and bf ~= nil then
-                local event = table.pack(os.pullEvent())
+                local event = table_pack(os_pullEvent())
                 aq[#aq+1] = event
                 bq[#bq+1] = event
             else
-                os.queueEvent("__queue_end")
+                os_queueEvent("__queue_end")
                 while true do
-                    local event = table.pack(os.pullEvent())
+                    local event = table_pack(os_pullEvent())
                     if event[1] == "__queue_end" then break end
                     aq[#aq+1] = event
                     bq[#bq+1] = event
@@ -1742,14 +1761,14 @@ function aukit.play(callback, progress, volume, ...)
         end
     until coroutine.status(b) == "dead" or complete
     while coroutine.status(b) == "suspended" and #bq > 0 do
-        local event = table.remove(bq, 1)
+        local event = table_remove(bq, 1)
         if bf == nil or event[1] == bf then
             ok, bf = coroutine.resume(b, table_unpack(event, 1, event.n))
             if not ok then error(bf, 2) end
         end
     end
     while coroutine.status(b) == "suspended" do
-        ok, bf = coroutine.resume(b, os.pullEvent())
+        ok, bf = coroutine.resume(b, os_pullEvent())
         if not ok then error(bf, 2) end
     end
 end
@@ -1785,9 +1804,9 @@ function aukit.detect(data)
         -- This expects the start or end of the audio to be (near) silence
         for _, bits in pairs(datafmts) do
             local mid, gap = bits[3] == "unsigned" and 2^(bits[2]-1) or 0, bits[3] == "float" and 0.001 or 8 * 2^(bits[2]-8)
-            local nums = {pcall(string.unpack, bits[1], data)}
+            local nums = {pcall(str_unpack, bits[1], data)}
             nums[#nums] = nil
-            if table.remove(nums, 1) then
+            if table_remove(nums, 1) then
                 local allzero, ok = true, true
                 for _, v in ipairs(nums) do
                     if v ~= mid then allzero = false end
@@ -1795,9 +1814,9 @@ function aukit.detect(data)
                 end
                 if ok and not allzero then return "pcm", table_unpack(bits, 2) end
             end
-            nums = {pcall(string.unpack, bits[1], data, #data - bits[2])}
+            nums = {pcall(str_unpack, bits[1], data, #data - bits[2])}
             nums[#nums] = nil
-            if table.remove(nums, 1) then
+            if table_remove(nums, 1) then
                 local allzero, ok = true, true
                 for _, v in ipairs(nums) do
                     if v ~= mid then allzero = false end
@@ -2064,17 +2083,29 @@ function aukit.stream.dfpwm(data, sampleRate, channels, mono)
     local pos = 1
     local last = 0
     local isstr = type(data) == "string"
+    local buf = ""
     return function()
         local d
         if isstr then
             if pos > #data then return nil end
             d = data:sub(pos, pos + 6000 * channels)
-        else d = data() if not d then return nil end end
+        else
+            while #buf < sampleRate / 8 * channels do
+                local chunk = data()
+                if not chunk then
+                    if #buf == 0 then return nil
+                    else break end
+                end
+                buf = buf .. chunk
+            end
+            d = buf:sub(1, 6000 * channels)
+            buf = buf:sub(6000 * channels + 1)
+        end
         local audio = decoder(d)
         if audio == nil or #audio == 0 then return nil end
         audio[0], last = last, audio[#audio]
-        os.queueEvent("nosleep")
-        repeat until "nosleep" == os.pullEvent()
+        os_queueEvent("nosleep")
+        repeat until "nosleep" == os_pullEvent()
         local ratio = 48000 / sampleRate
         local newlen = #audio * ratio
         local interp = interpolate[aukit.defaultInterpolation]
@@ -2092,8 +2123,8 @@ function aukit.stream.dfpwm(data, sampleRate, channels, mono)
             end
             if mono then lines[1][math_ceil(i / channels)] = n / channels end
         end
-        os.queueEvent("nosleep")
-        repeat until "nosleep" == os.pullEvent()
+        os_queueEvent("nosleep")
+        repeat until "nosleep" == os_pullEvent()
         local p = pos
         pos = pos + 6000 * channels
         return lines, p * 8 / sampleRate / channels
@@ -2153,7 +2184,13 @@ function aukit.stream.msadpcm(input, blockAlign, channels, sampleRate, mono, coe
             local target = n + bytesPerSecond
             local retval = {{}, not mono and {} or nil}
             local rp = 0
+            local start = os_epoch "utc"
             while n < target do
+                if os_epoch "utc" - start > 3000 then
+                    os_queueEvent("nosleep")
+                    repeat until "nosleep" == os_pullEvent()
+                    start = os_epoch "utc"
+                end
                 if isfunc and n > #data then
                     pos = pos + #data
                     n = n - #data
@@ -2166,14 +2203,14 @@ function aukit.stream.msadpcm(input, blockAlign, channels, sampleRate, mono, coe
                     left[i-#lastL-1] = lastL[i]
                     right[i-#lastR-1] = lastR[i]
                 end end
-                local predictorIndexL, predictorIndexR, deltaL, deltaR, sample1L, sample1R, sample2L, sample2R = ("<BBhhhhhh"):unpack(data, n)
+                local predictorIndexL, predictorIndexR, deltaL, deltaR, sample1L, sample1R, sample2L, sample2R = str_unpack("<BBhhhhhh", data, n)
                 local c1L, c2L, c1R, c2R = coeff1[predictorIndexL], coeff2[predictorIndexL], coeff1[predictorIndexR], coeff2[predictorIndexR]
                 left[1] = math_floor(sample2L / (sample2L < 0 and 128 or 127))
                 left[2] = math_floor(sample1L / (sample1L < 0 and 128 or 127))
                 right[1] = math_floor(sample2R / (sample2R < 0 and 128 or 127))
                 right[2] = math_floor(sample1R / (sample1R < 0 and 128 or 127))
                 for i = 14, blockAlign - 1 do
-                    local b = data:byte(n+i)
+                    local b = str_byte(data, n+i)
                     local hi, lo = bit32_rshift(b, 4), bit32_band(b, 0x0F)
                     if hi >= 8 then hi = hi - 16 end
                     if lo >= 8 then lo = lo - 16 end
@@ -2211,7 +2248,13 @@ function aukit.stream.msadpcm(input, blockAlign, channels, sampleRate, mono, coe
             local target = n + bytesPerSecond
             local retval = {{}}
             local rp = 0
+            local start = os_epoch "utc"
             while n < target do
+                if os_epoch "utc" - start > 3000 then
+                    os_queueEvent("nosleep")
+                    repeat until "nosleep" == os_pullEvent()
+                    start = os_epoch "utc"
+                end
                 if isfunc and n > #data then
                     pos = pos + #data
                     n = n - #data
@@ -2220,12 +2263,12 @@ function aukit.stream.msadpcm(input, blockAlign, channels, sampleRate, mono, coe
                 end
                 if n > #data then break end
                 local left = {}
-                local predictorIndex, delta, sample1, sample2 = ("<!1Bhhh"):unpack(data)
+                local predictorIndex, delta, sample1, sample2 = str_unpack("<!1Bhhh", data)
                 local c1, c2 = coeff1[predictorIndex], coeff2[predictorIndex]
                 left[1] = sample2 / (sample2 < 0 and 128 or 127)
                 left[2] = sample1 / (sample1 < 0 and 128 or 127)
                 for i = 7, blockAlign - 1 do
-                    local b = data:byte(n+i)
+                    local b = str_byte(data, n+i)
                     local hi, lo = bit32_rshift(b, 4), bit32_band(b, 0x0F)
                     if hi >= 8 then hi = hi - 16 end
                     if lo >= 8 then lo = lo - 16 end
@@ -2284,31 +2327,41 @@ function aukit.stream.adpcm(input, blockAlign, channels, sampleRate, mono)
     local bytesPerSecond = blockAlign * iterPerSecond
     local newlen = math_floor(samplesPerBlock * ratio)
     local last
-    print(blockAlign, samplesPerBlock, iterPerSecond, bytesPerSecond, newlen)
     return function()
         if data == nil then return nil end
         local target = n + bytesPerSecond
         local retval = {{}}
         if not mono then for i = 2, channels do retval[i] = {} end end
         local rp = 0
-        while n < target do
-            if isfunc and n > #data then
-                pos = pos + #data
-                n = n - #data
-                data = input()
-                if data == nil then return nil end
+        if isfunc and target > #data then
+            pos = pos + n - 1
+            target = target - n + 1
+            data = data:sub(n)
+            n = 1
+            while #data < target do
+                local d = input()
+                if not d then break end
+                data = data .. d
             end
-            if n > #data then break end
+        end
+        local start = os_epoch "utc"
+        while n < target do
+            if os_epoch "utc" - start > 3000 then
+                os_queueEvent("nosleep")
+                repeat until "nosleep" == os_pullEvent()
+                start = os_epoch "utc"
+            end
+            if n + channels * 4 > #data then break end
             local d = {}
             for i = 1, channels do d[i] = {} end
             if last then for i = 1, channels do for j = 1, #last[i] do d[j-#last[i]-1] = last[i][j] end end end
             local predictor, step_index, step = {}, {}, {}
-            for i = 1, channels do predictor[i], step_index[i] = ("<hB"):unpack(data, n + (i - 1) * 4) end
+            for i = 1, channels do predictor[i], step_index[i] = str_unpack("<hB", data, n + (i - 1) * 4) end
             for i = channels * 4, blockAlign, channels * 4 do
                 local p = (i - channels * 4) / channels * 2 + 1
                 if #data < n + i + channels*4 then break end
                 for j = 1, channels do
-                    local num = ("<I"):unpack(data, n + i + (j-1)*4)
+                    local num = str_unpack("<I", data, n + i + (j-1)*4)
                     for k = 0, 7 do
                         local nibble = bit32_extract(num, k*4, 4)
                         step[j] = ima_step_table[step_index[j]]
@@ -2358,29 +2411,29 @@ function aukit.stream.wav(data, mono, ignoreHeader)
     if type(data) == "function" then fn, data = data, data() end
     expect(1, data, "string")
     local channels, sampleRate, bitDepth, length, dataType, blockAlign, coefficients
-    local temp, pos = ("c4"):unpack(data)
+    local temp, pos = str_unpack("c4", data)
     if temp ~= "RIFF" then error("bad argument #1 (not a WAV file)", 2) end
     pos = pos + 4
-    temp, pos = ("c4"):unpack(data, pos)
+    temp, pos = str_unpack("c4", data, pos)
     if temp ~= "WAVE" then error("bad argument #1 (not a WAV file)", 2) end
     while pos <= #data do
         local size
-        temp, pos = ("c4"):unpack(data, pos)
-        size, pos = ("<I"):unpack(data, pos)
+        temp, pos = str_unpack("c4", data, pos)
+        size, pos = str_unpack("<I", data, pos)
         if temp == "fmt " then
             local chunk = data:sub(pos, pos + size - 1)
             pos = pos + size
             local format
-            format, channels, sampleRate, blockAlign, bitDepth = ("<HHIxxxxHH"):unpack(chunk)
+            format, channels, sampleRate, blockAlign, bitDepth = str_unpack("<HHIxxxxHH", chunk)
             if format == 1 then
                 dataType = bitDepth == 8 and "unsigned" or "signed"
             elseif format == 2 then
                 dataType = "msadpcm"
-                local numcoeff = ("<H"):unpack(chunk, 21)
+                local numcoeff = str_unpack("<H", chunk, 21)
                 if numcoeff > 0 then
                     coefficients = {{}, {}}
                     for i = 1, numcoeff do
-                        coefficients[1][i], coefficients[2][i] = ("<hh"):unpack(chunk, i * 4 + 19)
+                        coefficients[1][i], coefficients[2][i] = str_unpack("<hh", chunk, i * 4 + 19)
                     end
                 end
             elseif format == 3 then
@@ -2388,7 +2441,7 @@ function aukit.stream.wav(data, mono, ignoreHeader)
             elseif format == 0x11 then
                 dataType = "adpcm"
             elseif format == 0xFFFE then
-                bitDepth = ("<H"):unpack(chunk, 19)
+                bitDepth = str_unpack("<H", chunk, 19)
                 local uuid = chunk:sub(25, 40)
                 if uuid == wavExtensible.pcm then dataType = bitDepth == 8 and "unsigned" or "signed"
                 elseif uuid == wavExtensible.adpcm then dataType = "adpcm"
@@ -2441,24 +2494,24 @@ function aukit.stream.aiff(data, mono, ignoreHeader)
     expect(1, data, "string")
     expect(2, mono, "boolean", "nil")
     local channels, sampleRate, bitDepth, length, offset
-    local temp, pos = ("c4"):unpack(data)
+    local temp, pos = str_unpack("c4", data)
     if temp ~= "FORM" then error("bad argument #1 (not an AIFF file)", 2) end
     pos = pos + 4
-    temp, pos = ("c4"):unpack(data, pos)
+    temp, pos = str_unpack("c4", data, pos)
     if temp ~= "AIFF" then error("bad argument #1 (not an AIFF file)", 2) end
     while pos <= #data do
         local size
-        temp, pos = ("c4"):unpack(data, pos)
-        size, pos = (">I"):unpack(data, pos)
+        temp, pos = str_unpack("c4", data, pos)
+        size, pos = str_unpack(">I", data, pos)
         if temp == "COMM" then
             local e, m
-            channels, length, bitDepth, e, m, pos = (">hIhHI7x"):unpack(data, pos)
+            channels, length, bitDepth, e, m, pos = str_unpack(">hIhHI7x", data, pos)
             length = length * channels * math_floor(bitDepth / 8)
             local s = bit32_btest(e, 0x8000)
             e = ((bit32_band(e, 0x7FFF) - 0x3FFE) % 0x800)
             sampleRate = math.ldexp(m * (s and -1 or 1) / 0x100000000000000, e)
         elseif temp == "SSND" then
-            offset, _, pos = (">II"):unpack(data, pos)
+            offset, _, pos = str_unpack(">II", data, pos)
             local data = data:sub(pos + offset, pos + offset + length - 1)
             if not fn and #data < length then error("invalid AIFF file", 2) end
             if fn then
@@ -2470,7 +2523,7 @@ function aukit.stream.aiff(data, mono, ignoreHeader)
                         if not d then return nil end
                         if d:match "^FORM....AIFF" then
                             local n, p = d:match("^FORM....AIFF.?SSND(....)....()")
-                            offset = (">I"):unpack(n)
+                            offset = str_unpack(">I", n)
                             return d:sub(p + offset)
                         else return d end
                     else return fn() end
@@ -2498,7 +2551,7 @@ function aukit.stream.au(data, mono, ignoreHeader)
     if type(data) == "function" then fn, data = data, data() end
     expect(1, data, "string")
     expect(2, mono, "boolean", "nil")
-    local magic, offset, size, encoding, sampleRate, channels = (">c4IIIII"):unpack(data)
+    local magic, offset, size, encoding, sampleRate, channels = str_unpack(">c4IIIII", data)
     if magic ~= ".snd" then error("invalid AU file", 2) end
     if fn then
         local first, f = data:sub(offset, size ~= 0xFFFFFFFF and offset + size - 1 or nil), nil
@@ -2507,7 +2560,7 @@ function aukit.stream.au(data, mono, ignoreHeader)
             elseif ignoreHeader then
                 local d = fn()
                 if not d then return nil end
-                if d:match "^.snd" then return d:sub((">I"):unpack(d:sub(5, 8)), nil)
+                if d:match "^.snd" then return d:sub(str_unpack(">I", d:sub(5, 8)), nil)
                 else return d end
             else return fn() end
         end
@@ -2548,11 +2601,11 @@ function aukit.stream.flac(data, mono)
             if not d then self.final = true return nil end
             self.str = self.str .. d
         end
-        return self.str:byte(start, e)
+        return str_byte(self.str, start, e)
     end}, {__len = function(self) return self.final and #self.str or math.huge end}) end
     local function saferesume(coro, ...)
-        local res = table.pack(coroutine.resume(coro, ...))
-        while res[1] and infn do res = table.pack(coroutine.resume(coro, coroutine.yield(table_unpack(res, 2, res.n)))) end
+        local res = table_pack(coroutine.resume(coro, ...))
+        while res[1] and infn do res = table_pack(coroutine.resume(coro, coroutine.yield(table_unpack(res, 2, res.n)))) end
         return table_unpack(res, 1, res.n)
     end
     local coro = coroutine.create(decodeFLAC)
@@ -2569,8 +2622,8 @@ function aukit.stream.flac(data, mono)
         while #chunk[1] < sampleRate do
             local ok, res = saferesume(coro)
             if not ok or res == nil or res.sampleRate then break end
-            os.queueEvent("nosleep")
-            repeat until "nosleep" == os.pullEvent()
+            os_queueEvent("nosleep")
+            repeat until "nosleep" == os_pullEvent()
             for c = 1, #res do
                 chunk[c] = chunk[c] or {}
                 local src, dest = res[c], chunk[c]
@@ -2590,8 +2643,8 @@ function aukit.stream.flac(data, mono)
                 end
                 last = {src[#src-1], src[#src]}
             end
-            os.queueEvent("nosleep")
-            repeat until "nosleep" == os.pullEvent()
+            os_queueEvent("nosleep")
+            repeat until "nosleep" == os_pullEvent()
         end
         pos = pos + #chunk[1] / 48000
         return chunk, pos
@@ -2701,7 +2754,7 @@ function aukit.effects.normalize(audio, peakAmplitude, independent)
         for c = 1, #audio.data do
             local ch = audio.data[c]
             if os_epoch "utc" - start > 3000 then start = os_epoch "utc" sleep(0) end
-            for i = 1, #ch do max = math.max(max, math_abs(ch[i])) end
+            for i = 1, #ch do max = math_max(max, math_abs(ch[i])) end
         end
         mult = peakAmplitude / max
     end
@@ -2709,7 +2762,7 @@ function aukit.effects.normalize(audio, peakAmplitude, independent)
         local ch = audio.data[c]
         if independent then
             local max = 0
-            for i = 1, #ch do max = math.max(max, math_abs(ch[i])) end
+            for i = 1, #ch do max = math_max(max, math_abs(ch[i])) end
             mult = peakAmplitude / max
         end
         if os_epoch "utc" - start > 3000 then start = os_epoch "utc" sleep(0) end
@@ -2729,7 +2782,7 @@ function aukit.effects.center(audio)
         local ch = audio.data[c]
         for i = 0, #ch - 1, audio.sampleRate do
             local avg = 0
-            local l = math.min(#ch - i, audio.sampleRate)
+            local l = math_min(#ch - i, audio.sampleRate)
             for j = 1, l do avg = avg + ch[i+j] end
             avg = avg / l
             for j = 1, l do ch[i+j] = clamp(ch[i+j] - avg, -1, 1) end

@@ -21,8 +21,18 @@ if path:match("^https?://") then
     if not handle then error("Could not connect to " .. path .. ": " .. err) end
     local code = handle.getResponseCode()
     if code ~= 200 then handle.close() error("Could not connect to " .. path .. ": HTTP " .. code) end
-    data = handle.readAll()
-    handle.close()
+    if v.streamData then
+        local closed = false
+        function data()
+            if closed then return nil end
+            local d = handle.read(48000)
+            if not d then handle.close() closed = true return nil end
+            return d
+        end
+    else
+        data = handle.readAll()
+        handle.close()
+    end
 elseif path:match("^wss?://") then
     local handle, err = http.websocket(path)
     if not handle then error("Could not connect to " .. path .. ": " .. err) end
@@ -56,8 +66,18 @@ else
     path = shell.resolve(...)
     local file, err = fs.open(path, "rb")
     if not file then error("Could not open " .. path .. ": " .. err) end
-    data = file.readAll()
-    file.close()
+    if v.streamData then
+        local closed = false
+        function data()
+            if closed then return nil end
+            local d = file.read(48000)
+            if not d then file.close() closed = true return nil end
+            return d
+        end
+    else
+        data = file.readAll()
+        file.close()
+    end
 end
 
 local iter, length
@@ -69,6 +89,7 @@ elseif v.type == "au" or path:lower():match("%.au$") then iter, length = aukit.s
 elseif v.type == "flac" or path:lower():match("%.flac$") then iter, length = aukit.stream.flac(data, mono)
 elseif v.type == "pcm" or path:lower():match("%.pcm$") or path:lower():match("%.raw$") or path:match("^rednet%+?%l*://") then iter, length = aukit.stream.pcm(data, v.bitDepth, v.dataType, v.channels, v.sampleRate, v.bigEndian, mono)
 else error("Unknown file type. Make sure to add the right file extension to the path/URL.") end
+if length == nil then length = 0 end
 
 print("Streaming...")
 local w = term.getSize()

@@ -42,6 +42,7 @@ To avoid overflowing the CC event queue, it is recommended that a delay is added
 
 The following options are supported in the parameter list:
 - `type` [all]: Type of file to load (`pcm`, `dfpwm`, `wav`, `aiff`, `au`, `flac`)
+- `streamData` [all]: Whether to force streaming file data instead of reading all at once (`true`, `false`) (default false)
 - `volume` [all]: Playback volume from 0.0 to 3.0 (default 1.0)
 - `mono` [all]: Whether to mix audio down to mono (`true`, `false`) (default false)
 - `interpolation` [all]: Interpolation mode to use when resampling (`none`, `linear`, `cubic`)
