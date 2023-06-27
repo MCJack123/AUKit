@@ -104,7 +104,7 @@ end})
 aukit.effects, aukit.stream = {}, {}
 
 --- @tfield string _VERSION The version of AUKit that is loaded. This follows [SemVer](https://semver.org) format.
-aukit._VERSION = "1.6.1"
+aukit._VERSION = "1.7.0"
 
 --- @tfield "none"|"linear"|"cubic"|"sinc" defaultInterpolation Default interpolation mode for @{Audio:resample} and other functions that need to resample.
 aukit.defaultInterpolation = "linear"
