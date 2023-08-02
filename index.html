@@ -27,10 +27,11 @@
 <h1>AUKit</h1>
 
 
+
 <h2>Contents</h2>
 <ul>
 <li><a href="#Fields">Fields</a></li>
-<li><a href="#Class_Audio">Class Audio </a></li>
+<li><a href="#Audio">Audio </a></li>
 <li><a href="#aukit">aukit </a></li>
 <li><a href="#aukit_stream">aukit.stream </a></li>
 <li><a href="#aukit_effects">aukit.effects </a></li>
@@ -115,7 +116,7 @@
 	<td class="summary"></td>
 	</tr>
 </table>
-<h2><a href="#Class_Audio">Class Audio </a></h2>
+<h2><a href="#Audio">Audio </a></h2>
 <table class="function_list">
 	<tr>
 	<td class="name" nowrap><a href="#Audio.sampleRate">Audio.sampleRate</a></td>
@@ -138,7 +139,7 @@
 	<td class="summary">Returns the number of channels in the audio object.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#Audio:resample">Audio:resample (sampleRate[, interpolation=aukit.defaultInterpolation])</a></td>
+	<td class="name" nowrap><a href="#Audio:resample">Audio:resample (sampleRate, interpolation)</a></td>
 	<td class="summary">Creates a new audio object with the data resampled to a different sample rate.</td>
 	</tr>
 	<tr>
@@ -152,7 +153,7 @@
  this one (if necessary), and inserting silence in any missing channels.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#Audio:sub">Audio:sub ([start=0[, last=0]])</a></td>
+	<td class="name" nowrap><a href="#Audio:sub">Audio:sub (start, last)</a></td>
 	<td class="summary">Takes a subregion of the audio and returns a new audio object with its contents.</td>
 	</tr>
 	<tr>
@@ -167,7 +168,7 @@
 	<td class="summary">Splits this audio object into one or more objects with the specified channels.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#Audio:mix">Audio:mix (amplifier[, ...])</a></td>
+	<td class="name" nowrap><a href="#Audio:mix">Audio:mix (amplifier, ...)</a></td>
 	<td class="summary">Mixes two or more audio objects into a single object, amplifying each sample
  with a multiplier (before clipping) if desired, and clipping any values
  outside the audio range ([-1, 1]).</td>
@@ -181,42 +182,42 @@
 	<td class="summary">Returns a reversed version of this audio.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#Audio:pcm">Audio:pcm ([bitDepth=8[, dataType="signed"[, interleaved=true]]])</a></td>
+	<td class="name" nowrap><a href="#Audio:pcm">Audio:pcm (bitDepth, dataType, interleaved)</a></td>
 	<td class="summary">Converts the audio data to raw PCM samples.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#Audio:stream">Audio:stream ([chunkSize=131072[, bitDepth=8[, dataType="signed"]]])</a></td>
+	<td class="name" nowrap><a href="#Audio:stream">Audio:stream (chunkSize, bitDepth, dataType)</a></td>
 	<td class="summary">Returns a function that can be called to encode PCM samples in chunks.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#Audio:wav">Audio:wav ([bitDepth=16])</a></td>
+	<td class="name" nowrap><a href="#Audio:wav">Audio:wav (bitDepth)</a></td>
 	<td class="summary">Coverts the audio data to a WAV file.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#Audio:dfpwm">Audio:dfpwm ([interleaved=true])</a></td>
+	<td class="name" nowrap><a href="#Audio:dfpwm">Audio:dfpwm (interleaved)</a></td>
 	<td class="summary">Converts the audio data to DFPWM.</td>
 	</tr>
 </table>
 <h2><a href="#aukit">aukit </a></h2>
 <table class="function_list">
 	<tr>
-	<td class="name" nowrap><a href="#pcm">pcm (data[, bitDepth=8[, dataType="signed"[, channels=1[, sampleRate=48000[, interleaved=true[, bigEndian=false]]]]]])</a></td>
+	<td class="name" nowrap><a href="#pcm">pcm (data, bitDepth, dataType, channels, sampleRate, interleaved, bigEndian)</a></td>
 	<td class="summary">Creates a new audio object from the specified raw PCM data.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#adpcm">adpcm (data[, channels=1[, sampleRate=48000[, topFirst=true[, interleaved=true[, predictor=0[, step_index=0]]]]]])</a></td>
+	<td class="name" nowrap><a href="#adpcm">adpcm (data, channels, sampleRate, topFirst, interleaved, predictor, step_index)</a></td>
 	<td class="summary">Creates a new audio object from IMA ADPCM data.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#msadpcm">msadpcm (data, blockAlign[, channels=1[, sampleRate=48000[, coefficients]]])</a></td>
+	<td class="name" nowrap><a href="#msadpcm">msadpcm (data, blockAlign, channels, sampleRate, coefficients)</a></td>
 	<td class="summary">Creates a new audio object from Microsoft ADPCM data.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#g711">g711 (data, ulaw[, channels=1[, sampleRate=8000]])</a></td>
+	<td class="name" nowrap><a href="#g711">g711 (data, ulaw, channels, sampleRate)</a></td>
 	<td class="summary">Creates a new audio object from G.711 u-law/A-law data.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#dfpwm">dfpwm (data[, channels=1[, sampleRate=48000]])</a></td>
+	<td class="name" nowrap><a href="#dfpwm">dfpwm (data, channels, sampleRate)</a></td>
 	<td class="summary">Creates a new audio object from DFPWM1a data.</td>
 	</tr>
 	<tr>
@@ -236,23 +237,23 @@
 	<td class="summary">Creates a new audio object from a FLAC file.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#new">new (duration[, channels=1[, sampleRate=48000]])</a></td>
+	<td class="name" nowrap><a href="#new">new (duration, channels, sampleRate)</a></td>
 	<td class="summary">Creates a new empty audio object with the specified duration.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#tone">tone (frequency, duration[, amplitude=1[, waveType="sine"[, duty=0.5[, channels=1[, sampleRate=48000]]]]])</a></td>
+	<td class="name" nowrap><a href="#tone">tone (frequency, duration, amplitude, waveType, duty, channels, sampleRate)</a></td>
 	<td class="summary">Creates a new audio object with a tone of the specified frequency and duration.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#noise">noise (duration[, amplitude=1[, channels=1[, sampleRate=48000]]])</a></td>
+	<td class="name" nowrap><a href="#noise">noise (duration, amplitude, channels, sampleRate)</a></td>
 	<td class="summary">Creates a new audio object with white noise for the specified duration.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#pack">pack (data[, bitDepth=8[, dataType="signed"[, bigEndian=false]]])</a></td>
+	<td class="name" nowrap><a href="#pack">pack (data, bitDepth, dataType, bigEndian)</a></td>
 	<td class="summary">Packs a table with PCM data into a string using the specified data type.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#play">play (callback[, progress][, volume], ...)</a></td>
+	<td class="name" nowrap><a href="#play">play (callback, progress, volume, ...)</a></td>
 	<td class="summary">Plays back stream functions created by one of the <a href="index.html#Audio:stream">aukit.stream</a> functions
  or <a href="index.html#Audio:stream">Audio:stream</a>.</td>
 	</tr>
@@ -264,39 +265,39 @@
 <h2><a href="#aukit_stream">aukit.stream </a></h2>
 <table class="function_list">
 	<tr>
-	<td class="name" nowrap><a href="#aukit.stream.pcm">aukit.stream.pcm (data[, bitDepth=8[, dataType="signed"[, channels=1[, sampleRate=48000[, bigEndian=false[, mono=false]]]]]])</a></td>
+	<td class="name" nowrap><a href="#aukit.stream.pcm">aukit.stream.pcm (data, bitDepth, dataType, channels, sampleRate, bigEndian, mono)</a></td>
 	<td class="summary">Returns an iterator to stream raw PCM audio in CC format.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#aukit.stream.dfpwm">aukit.stream.dfpwm (data[, sampleRate=48000[, channels=1[, mono=false]]])</a></td>
+	<td class="name" nowrap><a href="#aukit.stream.dfpwm">aukit.stream.dfpwm (data, sampleRate, channels, mono)</a></td>
 	<td class="summary">Returns an iterator to stream audio from DFPWM data.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#aukit.stream.msadpcm">aukit.stream.msadpcm (input, blockAlign[, channels=1[, sampleRate=48000[, mono=false[, coefficients]]]])</a></td>
+	<td class="name" nowrap><a href="#aukit.stream.msadpcm">aukit.stream.msadpcm (input, blockAlign, channels, sampleRate, mono, coefficients)</a></td>
 	<td class="summary">Returns an iterator to stream audio from Microsoft ADPCM data.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#aukit.stream.adpcm">aukit.stream.adpcm (input, blockAlign[, channels=1[, sampleRate=48000[, mono=false]]])</a></td>
+	<td class="name" nowrap><a href="#aukit.stream.adpcm">aukit.stream.adpcm (input, blockAlign, channels, sampleRate, mono)</a></td>
 	<td class="summary">Returns an iterator to stream data from IMA ADPCM data.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#aukit.stream.g711">aukit.stream.g711 (input, ulaw[, channels=1[, sampleRate=8000[, mono=false]]])</a></td>
+	<td class="name" nowrap><a href="#aukit.stream.g711">aukit.stream.g711 (input, ulaw, channels, sampleRate, mono)</a></td>
 	<td class="summary">Returns an iterator to stream data from u-law/A-law G.711 data.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#aukit.stream.wav">aukit.stream.wav (data[, mono=false[, ignoreHeader=false]])</a></td>
+	<td class="name" nowrap><a href="#aukit.stream.wav">aukit.stream.wav (data, mono, ignoreHeader)</a></td>
 	<td class="summary">Returns an iterator to stream audio from a WAV file.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#aukit.stream.aiff">aukit.stream.aiff (data[, mono=false[, ignoreHeader=false]])</a></td>
+	<td class="name" nowrap><a href="#aukit.stream.aiff">aukit.stream.aiff (data, mono, ignoreHeader)</a></td>
 	<td class="summary">Returns an iterator to stream audio from an AIFF or AIFC file.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#aukit.stream.au">aukit.stream.au (data[, mono=false[, ignoreHeader=false]])</a></td>
+	<td class="name" nowrap><a href="#aukit.stream.au">aukit.stream.au (data, mono, ignoreHeader)</a></td>
 	<td class="summary">Returns an iterator to stream data from an AU file.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#aukit.stream.flac">aukit.stream.flac (data[, mono=false])</a></td>
+	<td class="name" nowrap><a href="#aukit.stream.flac">aukit.stream.flac (data, mono)</a></td>
 	<td class="summary">Returns an iterator to stream data from a FLAC file.</td>
 	</tr>
 </table>
@@ -320,7 +321,7 @@
 	<td class="summary">Inverts all channels in the specified audio.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#aukit.effects.normalize">aukit.effects.normalize (audio[, peakAmplitude=1[, independent=false]])</a></td>
+	<td class="name" nowrap><a href="#aukit.effects.normalize">aukit.effects.normalize (audio, peakAmplitude, independent)</a></td>
 	<td class="summary">Normalizes audio to the specified peak amplitude.</td>
 	</tr>
 	<tr>
@@ -328,19 +329,19 @@
 	<td class="summary">Centers the DC offset of each channel.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#aukit.effects.trim">aukit.effects.trim (audio[, threshold=1/65536])</a></td>
+	<td class="name" nowrap><a href="#aukit.effects.trim">aukit.effects.trim (audio, threshold)</a></td>
 	<td class="summary">Trims any extra silence on either end of the specified audio.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#aukit.effects.delay">aukit.effects.delay (audio, delay[, multiplier=0.5])</a></td>
+	<td class="name" nowrap><a href="#aukit.effects.delay">aukit.effects.delay (audio, delay, multiplier)</a></td>
 	<td class="summary">Adds a delay to the specified audio.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#aukit.effects.echo">aukit.effects.echo (audio[, delay=1[, multiplier=0.5]])</a></td>
+	<td class="name" nowrap><a href="#aukit.effects.echo">aukit.effects.echo (audio, delay, multiplier)</a></td>
 	<td class="summary">Adds an echo to the specified audio.</td>
 	</tr>
 	<tr>
-	<td class="name" nowrap><a href="#aukit.effects.reverb">aukit.effects.reverb (audio[, delay=100[, decay=0.3[, wetMultiplier=1[, dryMultiplier=0]]]])</a></td>
+	<td class="name" nowrap><a href="#aukit.effects.reverb">aukit.effects.reverb (audio, delay, decay, wetMultiplier, dryMultiplier)</a></td>
 	<td class="summary">Adds reverb to the specified audio.</td>
 	</tr>
 	<tr>
@@ -401,7 +402,7 @@
 
 </dd>
 </dl>
-    <h2 class="section-header "><a name="Class_Audio"></a>Class Audio </h2>
+    <h2 class="section-header "><a name="Audio"></a>Audio </h2>
 
     <dl class="function">
     <dt>
@@ -477,7 +478,7 @@
     <ol>
 
            <span class="types"><span class="type">number</span></span>
-        The audio length
+        _ The audio length
     </ol>
 
 
@@ -497,7 +498,7 @@
     <ol>
 
            <span class="types"><span class="type">number</span></span>
-        The number of channels
+        _ The number of channels
     </ol>
 
 
@@ -506,7 +507,7 @@
 </dd>
     <dt>
     <a name = "Audio:resample"></a>
-    <strong>Audio:resample (sampleRate[, interpolation=aukit.defaultInterpolation])</strong>
+    <strong>Audio:resample (sampleRate, interpolation)</strong>
     </dt>
     <dd>
     Creates a new audio object with the data resampled to a different sample rate.
@@ -520,17 +521,15 @@
          The new sample rate in Hertz
         </li>
         <li><span class="parameter">interpolation</span>
-            <span class="types"><span class="type">"none"</span>, <span class="type">"linear"</span> or <span class="type">"cubic"</span></span>
-         The interpolation mode to use
-         (<em>default</em> aukit.defaultInterpolation)
+        ? "none"|"linear"|"cubic" The interpolation mode to use
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        A new audio object with the resampled data
+           <span class="types"><span class="type">Audio</span></span>
+        _ A new audio object with the resampled data
     </ol>
 
 
@@ -549,8 +548,8 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        A new audio object with the audio mixed to mono
+           <span class="types"><span class="type">Audio</span></span>
+        _ A new audio object with the audio mixed to mono
     </ol>
 
 
@@ -570,16 +569,15 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">...</span>
-            <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-         The audio objects to concatenate
+         Audio The audio objects to concatenate
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        The new concatenated audio object
+           <span class="types"><span class="type">Audio</span></span>
+        _ The new concatenated audio object
     </ol>
 
 
@@ -588,7 +586,7 @@
 </dd>
     <dt>
     <a name = "Audio:sub"></a>
-    <strong>Audio:sub ([start=0[, last=0]])</strong>
+    <strong>Audio:sub (start, last)</strong>
     </dt>
     <dd>
     Takes a subregion of the audio and returns a new audio object with its contents.
@@ -598,22 +596,18 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">start</span>
-            <span class="types"><span class="type">number</span></span>
-         The start position of the audio in seconds
-         (<em>default</em> 0)
+        ? number The start position of the audio in seconds
         </li>
         <li><span class="parameter">last</span>
-            <span class="types"><span class="type">number</span></span>
-         The end position of the audio in seconds (0 means end of file)
-         (<em>default</em> 0)
+        ? number The end position of the audio in seconds (0 means end of file)
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        The new split audio object
+           <span class="types"><span class="type">Audio</span></span>
+        _ The new split audio object
     </ol>
 
 
@@ -634,16 +628,15 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">...</span>
-            <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-         The audio objects to combine with
+         Audio The audio objects to combine with
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        The new combined audio object
+           <span class="types"><span class="type">Audio</span></span>
+        _ The new combined audio object
     </ol>
 
 
@@ -662,16 +655,15 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">...</span>
-            <span class="types"><span class="type">{[number]...}</span></span>
-         The lists of channels in each new object
+         number[] The lists of channels in each new object
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio...</span></span>
-        The new audio objects created from the channels in each list
+           <span class="types"><span class="type">Audio</span></span>
+        ... The new audio objects created from the channels in each list
     </ol>
 
 
@@ -680,13 +672,13 @@
     <ul>
         <pre class="example">Split a stereo track into independent mono objects
 
-     <span class="keyword">local</span> left, right = stereo:split({<span class="number">1</span>}, {<span class="number">2</span>})</pre>
+     <span class="keyword">local</span> left, right = stereo:<span class="function-name">split</span>({<span class="number">1</span>}, {<span class="number">2</span>})</pre>
     </ul>
 
 </dd>
     <dt>
     <a name = "Audio:mix"></a>
-    <strong>Audio:mix (amplifier[, ...])</strong>
+    <strong>Audio:mix (amplifier, ...)</strong>
     </dt>
     <dd>
     Mixes two or more audio objects into a single object, amplifying each sample
@@ -699,21 +691,19 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">amplifier</span>
-            <span class="types"><span class="type">number</span> or <a class="type" href="index.html#Audio">Audio</a></span>
-         The multiplier to apply, or the first audio object
+            <span class="types"><span class="type">number</span></span>
+         |Audio The multiplier to apply, or the first audio object
         </li>
         <li><span class="parameter">...</span>
-            <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-         The objects to mix with this one
-         (<em>optional</em>)
+         Audio The objects to mix with this one
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        The new mixed audio object
+           <span class="types"><span class="type">Audio</span></span>
+        _ The new mixed audio object
     </ol>
 
 
@@ -739,8 +729,8 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        The repeated audio
+           <span class="types"><span class="type">Audio</span></span>
+        _ The repeated audio
     </ol>
 
 
@@ -759,8 +749,8 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        The reversed audio
+           <span class="types"><span class="type">Audio</span></span>
+        _ The reversed audio
     </ol>
 
 
@@ -769,7 +759,7 @@
 </dd>
     <dt>
     <a name = "Audio:pcm"></a>
-    <strong>Audio:pcm ([bitDepth=8[, dataType="signed"[, interleaved=true]]])</strong>
+    <strong>Audio:pcm (bitDepth, dataType, interleaved)</strong>
     </dt>
     <dd>
     Converts the audio data to raw PCM samples.
@@ -778,27 +768,21 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">bitDepth</span>
-            <span class="types"><span class="type">number</span></span>
-         The bit depth of the audio (8, 16, 24, 32)
-         (<em>default</em> 8)
+        ? number The bit depth of the audio (8, 16, 24, 32)
         </li>
         <li><span class="parameter">dataType</span>
-            <span class="types"><span class="type">"signed"</span>, <span class="type">"unsigned"</span> or <span class="type">"float"</span></span>
-         The type of each sample
-         (<em>default</em> "signed")
+        ? "signed"|"unsigned"|"float" The type of each sample
         </li>
         <li><span class="parameter">interleaved</span>
-            <span class="types"><span class="type">boolean</span></span>
-         Whether to interleave each channel
-         (<em>default</em> true)
+        ? boolean Whether to interleave each channel
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">{[number]...}</span></span>
-        The resulting audio data
+           <span class="types"><span class="type">number</span></span>
+        []|nil ... The resulting audio data
     </ol>
 
 
@@ -807,7 +791,7 @@
 </dd>
     <dt>
     <a name = "Audio:stream"></a>
-    <strong>Audio:stream ([chunkSize=131072[, bitDepth=8[, dataType="signed"]]])</strong>
+    <strong>Audio:stream (chunkSize, bitDepth, dataType)</strong>
     </dt>
     <dd>
     Returns a function that can be called to encode PCM samples in chunks.
@@ -817,32 +801,26 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">chunkSize</span>
-            <span class="types"><span class="type">number</span></span>
-         The size of each chunk
-         (<em>default</em> 131072)
+        ? number The size of each chunk
         </li>
         <li><span class="parameter">bitDepth</span>
-            <span class="types"><span class="type">number</span></span>
-         The bit depth of the audio (8, 16, 24, 32)
-         (<em>default</em> 8)
+        ? number The bit depth of the audio (8, 16, 24, 32)
         </li>
         <li><span class="parameter">dataType</span>
-            <span class="types"><span class="type">"signed"</span>, <span class="type">"unsigned"</span> or <span class="type">"float"</span></span>
-         The type of each sample
-         (<em>default</em> "signed")
+        ? "signed"|"unsigned"|"float" The type of each sample
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><span class="type">function():{{[number]...}...},number</span></span>
-         An iterator function that returns
+           <span class="types"><a class="type" href="index.html#fun">fun</a></span>
+        ():number[][]|nil,number|nil _ An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
            <span class="types"><span class="type">number</span></span>
-        The total length of the audio in seconds</li>
+        _ The total length of the audio in seconds</li>
     </ol>
 
 
@@ -851,7 +829,7 @@
 </dd>
     <dt>
     <a name = "Audio:wav"></a>
-    <strong>Audio:wav ([bitDepth=16])</strong>
+    <strong>Audio:wav (bitDepth)</strong>
     </dt>
     <dd>
     Coverts the audio data to a WAV file.
@@ -860,9 +838,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">bitDepth</span>
-            <span class="types"><span class="type">number</span></span>
-         The bit depth of the audio (1 = DFPWM, 8, 16, 24, 32)
-         (<em>default</em> 16)
+        ? number The bit depth of the audio (1 = DFPWM, 8, 16, 24, 32)
         </li>
     </ul>
 
@@ -870,7 +846,7 @@
     <ol>
 
            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-        The resulting WAV file data
+        _ The resulting WAV file data
     </ol>
 
 
@@ -879,7 +855,7 @@
 </dd>
     <dt>
     <a name = "Audio:dfpwm"></a>
-    <strong>Audio:dfpwm ([interleaved=true])</strong>
+    <strong>Audio:dfpwm (interleaved)</strong>
     </dt>
     <dd>
     Converts the audio data to DFPWM.  All channels share the same encoder, and
@@ -890,17 +866,15 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">interleaved</span>
-            <span class="types"><span class="type">boolean</span></span>
-         Whether to interleave the channels
-         (<em>default</em> true)
+        ? boolean Whether to interleave the channels
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">string...</span></span>
-        The resulting DFPWM data for each channel (only one string
+           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+        ... The resulting DFPWM data for each channel (only one string
  if `interleaved` is true)
     </ol>
 
@@ -914,7 +888,7 @@
     <dl class="function">
     <dt>
     <a name = "pcm"></a>
-    <strong>pcm (data[, bitDepth=8[, dataType="signed"[, channels=1[, sampleRate=48000[, interleaved=true[, bigEndian=false]]]]]])</strong>
+    <strong>pcm (data, bitDepth, dataType, channels, sampleRate, interleaved, bigEndian)</strong>
     </dt>
     <dd>
     Creates a new audio object from the specified raw PCM data.
@@ -923,47 +897,35 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a> or <a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a></span>
-         The audio data, either as a raw string, or a table
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         |table The audio data, either as a raw string, or a table
  of values (in the format specified by `bitDepth` and `dataType`)
         </li>
         <li><span class="parameter">bitDepth</span>
-            <span class="types"><span class="type">number</span></span>
-         The bit depth of the audio (8, 16, 24, 32); if `dataType` is "float" then this must be 32
-         (<em>default</em> 8)
+        ? number The bit depth of the audio (8, 16, 24, 32); if `dataType` is "float" then this must be 32
         </li>
         <li><span class="parameter">dataType</span>
-            <span class="types"><span class="type">"signed"</span>, <span class="type">"unsigned"</span> or <span class="type">"float"</span></span>
-         The type of each sample
-         (<em>default</em> "signed")
+        ? "signed"|"unsigned"|"float" The type of each sample
         </li>
         <li><span class="parameter">channels</span>
-            <span class="types"><span class="type">number</span></span>
-         The number of channels present in the audio
-         (<em>default</em> 1)
+        ? number The number of channels present in the audio
         </li>
         <li><span class="parameter">sampleRate</span>
-            <span class="types"><span class="type">number</span></span>
-         The sample rate of the audio in Hertz
-         (<em>default</em> 48000)
+        ? number The sample rate of the audio in Hertz
         </li>
         <li><span class="parameter">interleaved</span>
-            <span class="types"><span class="type">boolean</span></span>
-         Whether each channel is interleaved or separate
-         (<em>default</em> true)
+        ? boolean Whether each channel is interleaved or separate
         </li>
         <li><span class="parameter">bigEndian</span>
-            <span class="types"><span class="type">boolean</span></span>
-         Whether the audio is big-endian or little-endian; ignored if data is a table
-         (<em>default</em> false)
+        ? boolean Whether the audio is big-endian or little-endian; ignored if data is a table
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        A new audio object containing the specified data
+           <span class="types"><span class="type">Audio</span></span>
+        _ A new audio object containing the specified data
     </ol>
 
 
@@ -972,7 +934,7 @@
 </dd>
     <dt>
     <a name = "adpcm"></a>
-    <strong>adpcm (data[, channels=1[, sampleRate=48000[, topFirst=true[, interleaved=true[, predictor=0[, step_index=0]]]]]])</strong>
+    <strong>adpcm (data, channels, sampleRate, topFirst, interleaved, predictor, step_index)</strong>
     </dt>
     <dd>
     Creates a new audio object from IMA ADPCM data.
@@ -981,47 +943,35 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a> or <a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a></span>
-         The audio data, either as a raw string, or a table of nibbles
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         |table The audio data, either as a raw string, or a table of nibbles
         </li>
         <li><span class="parameter">channels</span>
-            <span class="types"><span class="type">number</span></span>
-         The number of channels present in the audio
-         (<em>default</em> 1)
+        ? number The number of channels present in the audio
         </li>
         <li><span class="parameter">sampleRate</span>
-            <span class="types"><span class="type">number</span></span>
-         The sample rate of the audio in Hertz
-         (<em>default</em> 48000)
+        ? number The sample rate of the audio in Hertz
         </li>
         <li><span class="parameter">topFirst</span>
-            <span class="types"><span class="type">boolean</span></span>
-         Whether the top nibble is the first nibble
+        ? boolean Whether the top nibble is the first nibble
  (true) or last (false); ignored if `data` is a table
-         (<em>default</em> true)
         </li>
         <li><span class="parameter">interleaved</span>
-            <span class="types"><span class="type">boolean</span></span>
-         Whether each channel is interleaved or separate
-         (<em>default</em> true)
+        ? boolean Whether each channel is interleaved or separate
         </li>
         <li><span class="parameter">predictor</span>
-            <span class="types"><span class="type">number</span> or <a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a></span>
-         The initial predictor value(s)
-         (<em>default</em> 0)
+        ? number|table The initial predictor value(s)
         </li>
         <li><span class="parameter">step_index</span>
-            <span class="types"><span class="type">number</span> or <a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a></span>
-         The initial step index(es)
-         (<em>default</em> 0)
+        ? number|table The initial step index(es)
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        A new audio object containing the decoded data
+           <span class="types"><span class="type">Audio</span></span>
+        _ A new audio object containing the decoded data
     </ol>
 
 
@@ -1030,7 +980,7 @@
 </dd>
     <dt>
     <a name = "msadpcm"></a>
-    <strong>msadpcm (data, blockAlign[, channels=1[, sampleRate=48000[, coefficients]]])</strong>
+    <strong>msadpcm (data, blockAlign, channels, sampleRate, coefficients)</strong>
     </dt>
     <dd>
     Creates a new audio object from Microsoft ADPCM data.
@@ -1047,27 +997,21 @@
          The number of bytes in each block
         </li>
         <li><span class="parameter">channels</span>
-            <span class="types"><span class="type">number</span></span>
-         The number of channels present in the audio
-         (<em>default</em> 1)
+        ? number The number of channels present in the audio
         </li>
         <li><span class="parameter">sampleRate</span>
-            <span class="types"><span class="type">number</span></span>
-         The sample rate of the audio in Hertz
-         (<em>default</em> 48000)
+        ? number The sample rate of the audio in Hertz
         </li>
         <li><span class="parameter">coefficients</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a></span>
-         Two lists of coefficients to use
-         (<em>optional</em>)
+        ? table Two lists of coefficients to use
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        A new audio object containing the decoded data
+           <span class="types"><span class="type">Audio</span></span>
+        _ A new audio object containing the decoded data
     </ol>
 
 
@@ -1076,7 +1020,7 @@
 </dd>
     <dt>
     <a name = "g711"></a>
-    <strong>g711 (data, ulaw[, channels=1[, sampleRate=8000]])</strong>
+    <strong>g711 (data, ulaw, channels, sampleRate)</strong>
     </dt>
     <dd>
     Creates a new audio object from G.711 u-law/A-law data.
@@ -1093,22 +1037,18 @@
          Whether the audio uses u-law (true) or A-law (false).
         </li>
         <li><span class="parameter">channels</span>
-            <span class="types"><span class="type">number</span></span>
-         The number of channels present in the audio
-         (<em>default</em> 1)
+        ? number The number of channels present in the audio
         </li>
         <li><span class="parameter">sampleRate</span>
-            <span class="types"><span class="type">number</span></span>
-         The sample rate of the audio in Hertz
-         (<em>default</em> 8000)
+        ? number The sample rate of the audio in Hertz
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        A new audio object containing the decoded data
+           <span class="types"><span class="type">Audio</span></span>
+        _ A new audio object containing the decoded data
     </ol>
 
 
@@ -1117,7 +1057,7 @@
 </dd>
     <dt>
     <a name = "dfpwm"></a>
-    <strong>dfpwm (data[, channels=1[, sampleRate=48000]])</strong>
+    <strong>dfpwm (data, channels, sampleRate)</strong>
     </dt>
     <dd>
     Creates a new audio object from DFPWM1a data.  All channels are expected to
@@ -1131,22 +1071,18 @@
          The audio data as a raw string
         </li>
         <li><span class="parameter">channels</span>
-            <span class="types"><span class="type">number</span></span>
-         The number of channels present in the audio
-         (<em>default</em> 1)
+        ? number The number of channels present in the audio
         </li>
         <li><span class="parameter">sampleRate</span>
-            <span class="types"><span class="type">number</span></span>
-         The sample rate of the audio in Hertz
-         (<em>default</em> 48000)
+        ? number The sample rate of the audio in Hertz
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        A new audio object containing the decoded data
+           <span class="types"><span class="type">Audio</span></span>
+        _ A new audio object containing the decoded data
     </ol>
 
 
@@ -1174,8 +1110,8 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        A new audio object with the contents of the WAV file
+           <span class="types"><span class="type">Audio</span></span>
+        _ A new audio object with the contents of the WAV file
     </ol>
 
 
@@ -1201,8 +1137,8 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        A new audio object with the contents of the AIFF file
+           <span class="types"><span class="type">Audio</span></span>
+        _ A new audio object with the contents of the AIFF file
     </ol>
 
 
@@ -1228,8 +1164,8 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        A new audio object with the contents of the AU file
+           <span class="types"><span class="type">Audio</span></span>
+        _ A new audio object with the contents of the AU file
     </ol>
 
 
@@ -1255,8 +1191,8 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        A new audio object with the contents of the FLAC file
+           <span class="types"><span class="type">Audio</span></span>
+        _ A new audio object with the contents of the FLAC file
     </ol>
 
 
@@ -1265,7 +1201,7 @@
 </dd>
     <dt>
     <a name = "new"></a>
-    <strong>new (duration[, channels=1[, sampleRate=48000]])</strong>
+    <strong>new (duration, channels, sampleRate)</strong>
     </dt>
     <dd>
     Creates a new empty audio object with the specified duration.
@@ -1278,22 +1214,18 @@
          The length of the audio in seconds
         </li>
         <li><span class="parameter">channels</span>
-            <span class="types"><span class="type">number</span></span>
-         The number of channels present in the audio
-         (<em>default</em> 1)
+        ? number The number of channels present in the audio
         </li>
         <li><span class="parameter">sampleRate</span>
-            <span class="types"><span class="type">number</span></span>
-         The sample rate of the audio in Hertz
-         (<em>default</em> 48000)
+        ? number The sample rate of the audio in Hertz
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        The new empty audio object
+           <span class="types"><span class="type">Audio</span></span>
+        _ The new empty audio object
     </ol>
 
 
@@ -1302,7 +1234,7 @@
 </dd>
     <dt>
     <a name = "tone"></a>
-    <strong>tone (frequency, duration[, amplitude=1[, waveType="sine"[, duty=0.5[, channels=1[, sampleRate=48000]]]]])</strong>
+    <strong>tone (frequency, duration, amplitude, waveType, duty, channels, sampleRate)</strong>
     </dt>
     <dd>
     Creates a new audio object with a tone of the specified frequency and duration.
@@ -1319,37 +1251,27 @@
          The length of the audio in seconds
         </li>
         <li><span class="parameter">amplitude</span>
-            <span class="types"><span class="type">number</span></span>
-         The amplitude of the audio from 0.0 to 1.0
-         (<em>default</em> 1)
+        ? number The amplitude of the audio from 0.0 to 1.0
         </li>
         <li><span class="parameter">waveType</span>
-            <span class="types"><span class="type">"sine"</span>, <span class="type">"triangle"</span>, <span class="type">"sawtooth"</span> or <span class="type">"square"</span></span>
-         The type of wave to generate
-         (<em>default</em> "sine")
+        ? "sine"|"triangle"|"sawtooth"|"square" The type of wave to generate
         </li>
         <li><span class="parameter">duty</span>
-            <span class="types"><span class="type">number</span></span>
-         The duty cycle of the square wave if selected; ignored otherwise
-         (<em>default</em> 0.5)
+        ? number The duty cycle of the square wave if selected; ignored otherwise
         </li>
         <li><span class="parameter">channels</span>
-            <span class="types"><span class="type">number</span></span>
-         The number of channels present in the audio
-         (<em>default</em> 1)
+        ? number The number of channels present in the audio
         </li>
         <li><span class="parameter">sampleRate</span>
-            <span class="types"><span class="type">number</span></span>
-         The sample rate of the audio in Hertz
-         (<em>default</em> 48000)
+        ? number The sample rate of the audio in Hertz
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        A new audio object with the tone
+           <span class="types"><span class="type">Audio</span></span>
+        _ A new audio object with the tone
     </ol>
 
 
@@ -1358,7 +1280,7 @@
 </dd>
     <dt>
     <a name = "noise"></a>
-    <strong>noise (duration[, amplitude=1[, channels=1[, sampleRate=48000]]])</strong>
+    <strong>noise (duration, amplitude, channels, sampleRate)</strong>
     </dt>
     <dd>
     Creates a new audio object with white noise for the specified duration.
@@ -1371,27 +1293,21 @@
          The length of the audio in seconds
         </li>
         <li><span class="parameter">amplitude</span>
-            <span class="types"><span class="type">number</span></span>
-         The amplitude of the audio from 0.0 to 1.0
-         (<em>default</em> 1)
+        ? number The amplitude of the audio from 0.0 to 1.0
         </li>
         <li><span class="parameter">channels</span>
-            <span class="types"><span class="type">number</span></span>
-         The number of channels present in the audio
-         (<em>default</em> 1)
+        ? number The number of channels present in the audio
         </li>
         <li><span class="parameter">sampleRate</span>
-            <span class="types"><span class="type">number</span></span>
-         The sample rate of the audio in Hertz
-         (<em>default</em> 48000)
+        ? number The sample rate of the audio in Hertz
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        A new audio object with noise
+           <span class="types"><span class="type">Audio</span></span>
+        _ A new audio object with noise
     </ol>
 
 
@@ -1400,7 +1316,7 @@
 </dd>
     <dt>
     <a name = "pack"></a>
-    <strong>pack (data[, bitDepth=8[, dataType="signed"[, bigEndian=false]]])</strong>
+    <strong>pack (data, bitDepth, dataType, bigEndian)</strong>
     </dt>
     <dd>
     Packs a table with PCM data into a string using the specified data type.
@@ -1409,23 +1325,17 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><span class="type">{[number]...}</span></span>
-         The PCM data to pack
+            <span class="types"><span class="type">number</span></span>
+         [] The PCM data to pack
         </li>
         <li><span class="parameter">bitDepth</span>
-            <span class="types"><span class="type">number</span></span>
-         The bit depth of the audio (8, 16, 24, 32); if `dataType` is "float" then this must be 32
-         (<em>default</em> 8)
+        ? number The bit depth of the audio (8, 16, 24, 32); if `dataType` is "float" then this must be 32
         </li>
         <li><span class="parameter">dataType</span>
-            <span class="types"><span class="type">"signed"</span>, <span class="type">"unsigned"</span> or <span class="type">"float"</span></span>
-         The type of each sample
-         (<em>default</em> "signed")
+        ? "signed"|"unsigned"|"float" The type of each sample
         </li>
         <li><span class="parameter">bigEndian</span>
-            <span class="types"><span class="type">boolean</span></span>
-         Whether the data should be big-endian or little-endian
-         (<em>default</em> false)
+        ? boolean Whether the data should be big-endian or little-endian
         </li>
     </ul>
 
@@ -1433,7 +1343,7 @@
     <ol>
 
            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-        The packed PCM data
+        _ The packed PCM data
     </ol>
 
 
@@ -1442,7 +1352,7 @@
 </dd>
     <dt>
     <a name = "play"></a>
-    <strong>play (callback[, progress][, volume], ...)</strong>
+    <strong>play (callback, progress, volume, ...)</strong>
     </dt>
     <dd>
     Plays back stream functions created by one of the <a href="index.html#Audio:stream">aukit.stream</a> functions
@@ -1452,24 +1362,19 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">callback</span>
-            <span class="types"><span class="type">function():{{[number]...}...}</span></span>
-         The iterator function that returns each chunk
+            <span class="types"><span class="type">function</span></span>
+         ():number[][] The iterator function that returns each chunk
         </li>
         <li><span class="parameter">progress</span>
-            <span class="types"><span class="type">function(pos:number)</span></span>
-         A callback to report progress to
+        ? function(pos:number) A callback to report progress to
  the caller; if omitted then this argument is the first speaker
-         (<em>optional</em>)
         </li>
         <li><span class="parameter">volume</span>
-            <span class="types"><span class="type">number</span></span>
-         The volume to play the audio at; if omitted then
+        ? number The volume to play the audio at; if omitted then
  this argument is the second speaker (if provided)
-         (<em>optional</em>)
         </li>
         <li><span class="parameter">...</span>
-            <span class="types"><span class="type">speaker</span></span>
-         The speakers to play on
+         speaker The speakers to play on
         </li>
     </ul>
 
@@ -1500,14 +1405,12 @@
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><a class="type" href="index.html#pcm">"pcm"</a>, <a class="type" href="index.html#dfpwm">"dfpwm"</a>, <a class="type" href="index.html#wav">"wav"</a>, <a class="type" href="index.html#aiff">"aiff"</a>, <a class="type" href="index.html#au">"au"</a>, <a class="type" href="index.html#flac">"flac"</a> or <span class="type">nil</span></span>
-        The type of audio file detected, or `nil` if none could be found</li>
+        "pcm"|"dfpwm"|"wav"|"aiff"|"au"|"flac"|nil _ The type of audio file detected, or `nil` if none could be found</li>
         <li>
-           <span class="types"><span class="type">number</span> or <span class="type">nil</span></span>
-        The bit depth for PCM data, if the type is "pcm" and the bit depth can be detected</li>
+           <span class="types"><span class="type">number</span></span>
+        |nil _ The bit depth for PCM data, if the type is "pcm" and the bit depth can be detected</li>
         <li>
-           <span class="types"><span class="type">"signed"</span>, <span class="type">"unsigned"</span>, <span class="type">"float"</span> or <span class="type">nil</span></span>
-        The data type for PCM data, if the type is "pcm" and the type can be detected</li>
+        "signed"|"unsigned"|"float"|nil _ The data type for PCM data, if the type is "pcm" and the type can be detected</li>
     </ol>
 
 
@@ -1520,7 +1423,7 @@
     <dl class="function">
     <dt>
     <a name = "aukit.stream.pcm"></a>
-    <strong>aukit.stream.pcm (data[, bitDepth=8[, dataType="signed"[, channels=1[, sampleRate=48000[, bigEndian=false[, mono=false]]]]]])</strong>
+    <strong>aukit.stream.pcm (data, bitDepth, dataType, channels, sampleRate, bigEndian, mono)</strong>
     </dt>
     <dd>
     Returns an iterator to stream raw PCM audio in CC format.  Audio will
@@ -1531,54 +1434,42 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a>, <a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a> or <span class="type">function</span></span>
-         The audio data, either as a raw string, a
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         |table|function The audio data, either as a raw string, a
  table of values (in the format specified by `bitDepth` and `dataType`), or a
  function that returns either of those types. Functions will be called at
  least once before returning to get the type of data to use.
         </li>
         <li><span class="parameter">bitDepth</span>
-            <span class="types"><span class="type">number</span></span>
-         The bit depth of the audio (8, 16, 24, 32); if `dataType` is "float" then this must be 32
-         (<em>default</em> 8)
+        ? number The bit depth of the audio (8, 16, 24, 32); if `dataType` is "float" then this must be 32
         </li>
         <li><span class="parameter">dataType</span>
-            <span class="types"><span class="type">"signed"</span>, <span class="type">"unsigned"</span> or <span class="type">"float"</span></span>
-         The type of each sample
-         (<em>default</em> "signed")
+        ? "signed"|"unsigned"|"float" The type of each sample
         </li>
         <li><span class="parameter">channels</span>
-            <span class="types"><span class="type">number</span></span>
-         The number of channels present in the audio
-         (<em>default</em> 1)
+        ? number The number of channels present in the audio
         </li>
         <li><span class="parameter">sampleRate</span>
-            <span class="types"><span class="type">number</span></span>
-         The sample rate of the audio in Hertz
-         (<em>default</em> 48000)
+        ? number The sample rate of the audio in Hertz
         </li>
         <li><span class="parameter">bigEndian</span>
-            <span class="types"><span class="type">boolean</span></span>
-         Whether the audio is big-endian or little-endian; ignored if data is a table
-         (<em>default</em> false)
+        ? boolean Whether the audio is big-endian or little-endian; ignored if data is a table
         </li>
         <li><span class="parameter">mono</span>
-            <span class="types"><span class="type">boolean</span></span>
-         Whether to mix the audio down to mono
-         (<em>default</em> false)
+        ? boolean Whether to mix the audio down to mono
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><span class="type">function():{{[number]...}...},number</span></span>
-         An iterator function that returns
+           <span class="types"><a class="type" href="index.html#fun">fun</a></span>
+        ():number[][]|nil,number|nil _ An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
            <span class="types"><span class="type">number</span></span>
-        The total length of the audio in seconds, or the length of
+        _ The total length of the audio in seconds, or the length of
  the first chunk if using a function</li>
     </ol>
 
@@ -1588,7 +1479,7 @@
 </dd>
     <dt>
     <a name = "aukit.stream.dfpwm"></a>
-    <strong>aukit.stream.dfpwm (data[, sampleRate=48000[, channels=1[, mono=false]]])</strong>
+    <strong>aukit.stream.dfpwm (data, sampleRate, channels, mono)</strong>
     </dt>
     <dd>
     Returns an iterator to stream audio from DFPWM data.  Audio will automatically
@@ -1599,37 +1490,31 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a> or <span class="type">function():string</span></span>
-         The DFPWM data to decode, or a function
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         |function():string The DFPWM data to decode, or a function
  returning chunks to decode
         </li>
         <li><span class="parameter">sampleRate</span>
-            <span class="types"><span class="type">number</span></span>
-         The sample rate of the audio in Hertz
-         (<em>default</em> 48000)
+        ? number The sample rate of the audio in Hertz
         </li>
         <li><span class="parameter">channels</span>
-            <span class="types"><span class="type">number</span></span>
-         The number of channels present in the audio
-         (<em>default</em> 1)
+        ? number The number of channels present in the audio
         </li>
         <li><span class="parameter">mono</span>
-            <span class="types"><span class="type">boolean</span></span>
-         Whether to mix the audio down to mono
-         (<em>default</em> false)
+        ? boolean Whether to mix the audio down to mono
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><span class="type">function():{{[number]...}...},number</span></span>
-         An iterator function that returns
+           <span class="types"><a class="type" href="index.html#fun">fun</a></span>
+        ():number[][]|nil,number|nil _ An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
-           <span class="types"><span class="type">number</span> or <span class="type">nil</span></span>
-        The total length of the audio in seconds, or nil if data
+           <span class="types"><span class="type">number</span></span>
+        |nil _ The total length of the audio in seconds, or nil if data
  is a function</li>
     </ol>
 
@@ -1639,7 +1524,7 @@
 </dd>
     <dt>
     <a name = "aukit.stream.msadpcm"></a>
-    <strong>aukit.stream.msadpcm (input, blockAlign[, channels=1[, sampleRate=48000[, mono=false[, coefficients]]]])</strong>
+    <strong>aukit.stream.msadpcm (input, blockAlign, channels, sampleRate, mono, coefficients)</strong>
     </dt>
     <dd>
     Returns an iterator to stream audio from Microsoft ADPCM data.  Audio will
@@ -1649,8 +1534,8 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">input</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a> or <span class="type">function():string</span></span>
-         The audio data as a raw string or
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         |function():string The audio data as a raw string or
  reader function
         </li>
         <li><span class="parameter">blockAlign</span>
@@ -1658,37 +1543,29 @@
          The number of bytes in each block
         </li>
         <li><span class="parameter">channels</span>
-            <span class="types"><span class="type">number</span></span>
-         The number of channels present in the audio
-         (<em>default</em> 1)
+        ? number The number of channels present in the audio
         </li>
         <li><span class="parameter">sampleRate</span>
-            <span class="types"><span class="type">number</span></span>
-         The sample rate of the audio in Hertz
-         (<em>default</em> 48000)
+        ? number The sample rate of the audio in Hertz
         </li>
         <li><span class="parameter">mono</span>
-            <span class="types"><span class="type">boolean</span></span>
-         Whether to mix the audio down to mono
-         (<em>default</em> false)
+        ? boolean Whether to mix the audio down to mono
         </li>
         <li><span class="parameter">coefficients</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.5">table</a></span>
-         Two lists of coefficients to use
-         (<em>optional</em>)
+        ? table Two lists of coefficients to use
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><span class="type">function():{{[number]...}...},number</span></span>
-         An iterator function that returns
+           <span class="types"><a class="type" href="index.html#fun">fun</a></span>
+        ():number[][]|nil,number|nil _ An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
-           <span class="types"><span class="type">number</span> or <span class="type">nil</span></span>
-        The total length of the audio in seconds, or nil if data
+           <span class="types"><span class="type">number</span></span>
+        |nil _ The total length of the audio in seconds, or nil if data
  is a function</li>
     </ol>
 
@@ -1698,7 +1575,7 @@
 </dd>
     <dt>
     <a name = "aukit.stream.adpcm"></a>
-    <strong>aukit.stream.adpcm (input, blockAlign[, channels=1[, sampleRate=48000[, mono=false]]])</strong>
+    <strong>aukit.stream.adpcm (input, blockAlign, channels, sampleRate, mono)</strong>
     </dt>
     <dd>
     Returns an iterator to stream data from IMA ADPCM data.  Audio will
@@ -1710,8 +1587,8 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">input</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a> or <span class="type">function():string</span></span>
-         The audio data as a raw string or
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         |function():string The audio data as a raw string or
  reader function
         </li>
         <li><span class="parameter">blockAlign</span>
@@ -1719,32 +1596,26 @@
          The number of bytes in each block
         </li>
         <li><span class="parameter">channels</span>
-            <span class="types"><span class="type">number</span></span>
-         The number of channels present in the audio
-         (<em>default</em> 1)
+        ? number The number of channels present in the audio
         </li>
         <li><span class="parameter">sampleRate</span>
-            <span class="types"><span class="type">number</span></span>
-         The sample rate of the audio in Hertz
-         (<em>default</em> 48000)
+        ? number The sample rate of the audio in Hertz
         </li>
         <li><span class="parameter">mono</span>
-            <span class="types"><span class="type">boolean</span></span>
-         Whether to mix the audio down to mono
-         (<em>default</em> false)
+        ? boolean Whether to mix the audio down to mono
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><span class="type">function():{{[number]...}...},number</span></span>
-         An iterator function that returns
+           <span class="types"><a class="type" href="index.html#fun">fun</a></span>
+        ():number[][]|nil,number|nil _ An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
-           <span class="types"><span class="type">number</span> or <span class="type">nil</span></span>
-        The total length of the audio in seconds, or nil if data
+           <span class="types"><span class="type">number</span></span>
+        |nil _ The total length of the audio in seconds, or nil if data
  is a function</li>
     </ol>
 
@@ -1754,7 +1625,7 @@
 </dd>
     <dt>
     <a name = "aukit.stream.g711"></a>
-    <strong>aukit.stream.g711 (input, ulaw[, channels=1[, sampleRate=8000[, mono=false]]])</strong>
+    <strong>aukit.stream.g711 (input, ulaw, channels, sampleRate, mono)</strong>
     </dt>
     <dd>
     Returns an iterator to stream data from u-law/A-law G.711 data.  Audio will
@@ -1764,8 +1635,8 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">input</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a> or <span class="type">function():string</span></span>
-         The audio data as a raw string or
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         |function():string The audio data as a raw string or
  reader function
         </li>
         <li><span class="parameter">ulaw</span>
@@ -1773,32 +1644,26 @@
          Whether the audio uses u-law (true) or A-law (false).
         </li>
         <li><span class="parameter">channels</span>
-            <span class="types"><span class="type">number</span></span>
-         The number of channels present in the audio
-         (<em>default</em> 1)
+        ? number The number of channels present in the audio
         </li>
         <li><span class="parameter">sampleRate</span>
-            <span class="types"><span class="type">number</span></span>
-         The sample rate of the audio in Hertz
-         (<em>default</em> 8000)
+        ? number The sample rate of the audio in Hertz
         </li>
         <li><span class="parameter">mono</span>
-            <span class="types"><span class="type">boolean</span></span>
-         Whether to mix the audio down to mono
-         (<em>default</em> false)
+        ? boolean Whether to mix the audio down to mono
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><span class="type">function():{{[number]...}...},number</span></span>
-         An iterator function that returns
+           <span class="types"><a class="type" href="index.html#fun">fun</a></span>
+        ():number[][]|nil,number|nil _ An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
-           <span class="types"><span class="type">number</span> or <span class="type">nil</span></span>
-        The total length of the audio in seconds, or nil if data
+           <span class="types"><span class="type">number</span></span>
+        |nil _ The total length of the audio in seconds, or nil if data
  is a function</li>
     </ol>
 
@@ -1808,7 +1673,7 @@
 </dd>
     <dt>
     <a name = "aukit.stream.wav"></a>
-    <strong>aukit.stream.wav (data[, mono=false[, ignoreHeader=false]])</strong>
+    <strong>aukit.stream.wav (data, mono, ignoreHeader)</strong>
     </dt>
     <dd>
     Returns an iterator to stream audio from a WAV file.  Audio will automatically
@@ -1819,33 +1684,29 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a> or <span class="type">function():string</span></span>
-         The WAV file to decode, or a function
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         |function():string The WAV file to decode, or a function
  returning chunks to decode (the first chunk MUST contain the ENTIRE header)
         </li>
         <li><span class="parameter">mono</span>
-            <span class="types"><span class="type">boolean</span></span>
-         Whether to mix the audio to mono
-         (<em>default</em> false)
+        ? boolean Whether to mix the audio to mono
         </li>
         <li><span class="parameter">ignoreHeader</span>
-            <span class="types"><span class="type">boolean</span></span>
-         Whether to ignore additional headers
+        ? boolean Whether to ignore additional headers
  if they appear later in the audio stream
-         (<em>default</em> false)
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><span class="type">function():{{[number]...}...},number</span></span>
-         An iterator function that returns
+           <span class="types"><a class="type" href="index.html#fun">fun</a></span>
+        ():number[][]|nil,number|nil _ An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
            <span class="types"><span class="type">number</span></span>
-        The total length of the audio in seconds</li>
+        |nil _ The total length of the audio in seconds</li>
     </ol>
 
 
@@ -1854,7 +1715,7 @@
 </dd>
     <dt>
     <a name = "aukit.stream.aiff"></a>
-    <strong>aukit.stream.aiff (data[, mono=false[, ignoreHeader=false]])</strong>
+    <strong>aukit.stream.aiff (data, mono, ignoreHeader)</strong>
     </dt>
     <dd>
     Returns an iterator to stream audio from an AIFF or AIFC file.  Audio will
@@ -1864,33 +1725,29 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a> or <span class="type">function():string</span></span>
-         The AIFF file to decode, or a function
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         |function():string The AIFF file to decode, or a function
  returning chunks to decode (the first chunk MUST contain the ENTIRE header)
         </li>
         <li><span class="parameter">mono</span>
-            <span class="types"><span class="type">boolean</span></span>
-         Whether to mix the audio to mono
-         (<em>default</em> false)
+        ? boolean Whether to mix the audio to mono
         </li>
         <li><span class="parameter">ignoreHeader</span>
-            <span class="types"><span class="type">boolean</span></span>
-         Whether to ignore additional headers
+        ? boolean Whether to ignore additional headers
  if they appear later in the audio stream
-         (<em>default</em> false)
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><span class="type">function():{{[number]...}...},number</span></span>
-         An iterator function that returns
+           <span class="types"><a class="type" href="index.html#fun">fun</a></span>
+        ():number[][]|nil,number|nil _ An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
            <span class="types"><span class="type">number</span></span>
-        The total length of the audio in seconds</li>
+        _ The total length of the audio in seconds</li>
     </ol>
 
 
@@ -1899,7 +1756,7 @@
 </dd>
     <dt>
     <a name = "aukit.stream.au"></a>
-    <strong>aukit.stream.au (data[, mono=false[, ignoreHeader=false]])</strong>
+    <strong>aukit.stream.au (data, mono, ignoreHeader)</strong>
     </dt>
     <dd>
     Returns an iterator to stream data from an AU file.  Audio will automatically
@@ -1909,33 +1766,29 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a> or <span class="type">function():string</span></span>
-         The AU file to decode, or a function
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         |function():string The AU file to decode, or a function
  returning chunks to decode (the first chunk MUST contain the ENTIRE header)
         </li>
         <li><span class="parameter">mono</span>
-            <span class="types"><span class="type">boolean</span></span>
-         Whether to mix the audio to mono
-         (<em>default</em> false)
+        ? boolean Whether to mix the audio to mono
         </li>
         <li><span class="parameter">ignoreHeader</span>
-            <span class="types"><span class="type">boolean</span></span>
-         Whether to ignore additional headers
+        ? boolean Whether to ignore additional headers
  if they appear later in the audio stream
-         (<em>default</em> false)
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><span class="type">function():{{[number]...}...},number</span></span>
-         An iterator function that returns
+           <span class="types"><a class="type" href="index.html#fun">fun</a></span>
+        ():number[][]|nil,number|nil _ An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
            <span class="types"><span class="type">number</span></span>
-        The total length of the audio in seconds</li>
+        _ The total length of the audio in seconds</li>
     </ol>
 
 
@@ -1944,7 +1797,7 @@
 </dd>
     <dt>
     <a name = "aukit.stream.flac"></a>
-    <strong>aukit.stream.flac (data[, mono=false])</strong>
+    <strong>aukit.stream.flac (data, mono)</strong>
     </dt>
     <dd>
     Returns an iterator to stream data from a FLAC file.  Audio will automatically
@@ -1954,27 +1807,25 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a> or <span class="type">function():string</span></span>
-         The FLAC file to decode, or a function
+            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
+         |function():string The FLAC file to decode, or a function
  returning chunks to decode
         </li>
         <li><span class="parameter">mono</span>
-            <span class="types"><span class="type">boolean</span></span>
-         Whether to mix the audio to mono
-         (<em>default</em> false)
+        ? boolean Whether to mix the audio to mono
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><span class="type">function():{{[number]...}...},number</span></span>
-         An iterator function that returns
+           <span class="types"><a class="type" href="index.html#fun">fun</a></span>
+        ():number[][]|nil,number|nil _ An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
            <span class="types"><span class="type">number</span></span>
-        The total length of the audio in seconds</li>
+        _ The total length of the audio in seconds</li>
     </ol>
 
 
@@ -1996,7 +1847,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
+            <span class="types"><span class="type">Audio</span></span>
          The audio to modify
         </li>
         <li><span class="parameter">multiplier</span>
@@ -2008,8 +1859,8 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        The audio modified
+           <span class="types"><span class="type">Audio</span></span>
+        _ The audio modified
     </ol>
 
 
@@ -2028,7 +1879,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
+            <span class="types"><span class="type">Audio</span></span>
          The audio to modify
         </li>
         <li><span class="parameter">multiplier</span>
@@ -2040,8 +1891,8 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        The audio modified
+           <span class="types"><span class="type">Audio</span></span>
+        _ The audio modified
     </ol>
 
 
@@ -2059,7 +1910,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
+            <span class="types"><span class="type">Audio</span></span>
          The audio to modify
         </li>
         <li><span class="parameter">startTime</span>
@@ -2083,8 +1934,8 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        The audio modified
+           <span class="types"><span class="type">Audio</span></span>
+        _ The audio modified
     </ol>
 
 
@@ -2102,7 +1953,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
+            <span class="types"><span class="type">Audio</span></span>
          The audio to modify
         </li>
     </ul>
@@ -2110,8 +1961,8 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        The audio modified
+           <span class="types"><span class="type">Audio</span></span>
+        _ The audio modified
     </ol>
 
 
@@ -2120,7 +1971,7 @@
 </dd>
     <dt>
     <a name = "aukit.effects.normalize"></a>
-    <strong>aukit.effects.normalize (audio[, peakAmplitude=1[, independent=false]])</strong>
+    <strong>aukit.effects.normalize (audio, peakAmplitude, independent)</strong>
     </dt>
     <dd>
     Normalizes audio to the specified peak amplitude.
@@ -2129,26 +1980,22 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
+            <span class="types"><span class="type">Audio</span></span>
          The audio to modify
         </li>
         <li><span class="parameter">peakAmplitude</span>
-            <span class="types"><span class="type">number</span></span>
-         The maximum amplitude
-         (<em>default</em> 1)
+        ? number The maximum amplitude
         </li>
         <li><span class="parameter">independent</span>
-            <span class="types"><span class="type">boolean</span></span>
-         Whether to normalize each channel independently
-         (<em>default</em> false)
+        ? boolean Whether to normalize each channel independently
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        The audio modified
+           <span class="types"><span class="type">Audio</span></span>
+        _ The audio modified
     </ol>
 
 
@@ -2166,7 +2013,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
+            <span class="types"><span class="type">Audio</span></span>
          The audio to modify
         </li>
     </ul>
@@ -2174,8 +2021,8 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        The audio modified
+           <span class="types"><span class="type">Audio</span></span>
+        _ The audio modified
     </ol>
 
 
@@ -2184,7 +2031,7 @@
 </dd>
     <dt>
     <a name = "aukit.effects.trim"></a>
-    <strong>aukit.effects.trim (audio[, threshold=1/65536])</strong>
+    <strong>aukit.effects.trim (audio, threshold)</strong>
     </dt>
     <dd>
     Trims any extra silence on either end of the specified audio.
@@ -2193,21 +2040,19 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
+            <span class="types"><span class="type">Audio</span></span>
          The audio to modify
         </li>
         <li><span class="parameter">threshold</span>
-            <span class="types"><span class="type">number</span></span>
-         The maximum value to register as silence
-         (<em>default</em> 1/65536)
+        ? number The maximum value to register as silence
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        The audio modified
+           <span class="types"><span class="type">Audio</span></span>
+        _ The audio modified
     </ol>
 
 
@@ -2216,7 +2061,7 @@
 </dd>
     <dt>
     <a name = "aukit.effects.delay"></a>
-    <strong>aukit.effects.delay (audio, delay[, multiplier=0.5])</strong>
+    <strong>aukit.effects.delay (audio, delay, multiplier)</strong>
     </dt>
     <dd>
     Adds a delay to the specified audio.
@@ -2225,7 +2070,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
+            <span class="types"><span class="type">Audio</span></span>
          The audio to modify
         </li>
         <li><span class="parameter">delay</span>
@@ -2233,17 +2078,15 @@
          The amount of time to delay for, in seconds
         </li>
         <li><span class="parameter">multiplier</span>
-            <span class="types"><span class="type">number</span></span>
-         The multiplier to apply to the delayed audio
-         (<em>default</em> 0.5)
+        ? number The multiplier to apply to the delayed audio
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        The audio modified
+           <span class="types"><span class="type">Audio</span></span>
+        _ The audio modified
     </ol>
 
 
@@ -2252,7 +2095,7 @@
 </dd>
     <dt>
     <a name = "aukit.effects.echo"></a>
-    <strong>aukit.effects.echo (audio[, delay=1[, multiplier=0.5]])</strong>
+    <strong>aukit.effects.echo (audio, delay, multiplier)</strong>
     </dt>
     <dd>
     Adds an echo to the specified audio.
@@ -2261,26 +2104,22 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
+            <span class="types"><span class="type">Audio</span></span>
          The audio to modify
         </li>
         <li><span class="parameter">delay</span>
-            <span class="types"><span class="type">number</span></span>
-         The amount of time to echo after, in seconds
-         (<em>default</em> 1)
+        ? number The amount of time to echo after, in seconds
         </li>
         <li><span class="parameter">multiplier</span>
-            <span class="types"><span class="type">number</span></span>
-         The decay multiplier to apply to the echoed audio
-         (<em>default</em> 0.5)
+        ? number The decay multiplier to apply to the echoed audio
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        The audio modified
+           <span class="types"><span class="type">Audio</span></span>
+        _ The audio modified
     </ol>
 
 
@@ -2289,7 +2128,7 @@
 </dd>
     <dt>
     <a name = "aukit.effects.reverb"></a>
-    <strong>aukit.effects.reverb (audio[, delay=100[, decay=0.3[, wetMultiplier=1[, dryMultiplier=0]]]])</strong>
+    <strong>aukit.effects.reverb (audio, delay, decay, wetMultiplier, dryMultiplier)</strong>
     </dt>
     <dd>
     Adds reverb to the specified audio.
@@ -2298,36 +2137,28 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
+            <span class="types"><span class="type">Audio</span></span>
          The audio to modify
         </li>
         <li><span class="parameter">delay</span>
-            <span class="types"><span class="type">number</span></span>
-         The amount of time to reverb after, in **milliseconds**
-         (<em>default</em> 100)
+        ? number The amount of time to reverb after, in **milliseconds**
         </li>
         <li><span class="parameter">decay</span>
-            <span class="types"><span class="type">number</span></span>
-         The decay factor to use
-         (<em>default</em> 0.3)
+        ? number The decay factor to use
         </li>
         <li><span class="parameter">wetMultiplier</span>
-            <span class="types"><span class="type">number</span></span>
-         The wet (reverbed) mix amount
-         (<em>default</em> 1)
+        ? number The wet (reverbed) mix amount
         </li>
         <li><span class="parameter">dryMultiplier</span>
-            <span class="types"><span class="type">number</span></span>
-         The dry (original) mix amount
-         (<em>default</em> 0)
+        ? number The dry (original) mix amount
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        The audio modified
+           <span class="types"><span class="type">Audio</span></span>
+        _ The audio modified
     </ol>
 
 
@@ -2345,7 +2176,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
+            <span class="types"><span class="type">Audio</span></span>
          The audio to modify
         </li>
         <li><span class="parameter">frequency</span>
@@ -2357,8 +2188,8 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        The audio modified
+           <span class="types"><span class="type">Audio</span></span>
+        _ The audio modified
     </ol>
 
 
@@ -2376,7 +2207,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
+            <span class="types"><span class="type">Audio</span></span>
          The audio to modify
         </li>
         <li><span class="parameter">frequency</span>
@@ -2388,8 +2219,8 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="index.html#Audio">Audio</a></span>
-        The audio modified
+           <span class="types"><span class="type">Audio</span></span>
+        _ The audio modified
     </ol>
 
 
@@ -2402,8 +2233,8 @@
 </div> <!-- id="content" -->
 </div> <!-- id="main" -->
 <div id="about">
-<i>generated by <a href="http://github.com/stevedonovan/LDoc">LDoc 1.4.6</a></i>
-<i style="float:right;">Last updated 2023-06-27 02:22:08 </i>
+<i>generated by <a href="http://github.com/lunarmodules/LDoc">LDoc 1.5.0</a></i>
+<i style="float:right;">Last updated 2023-08-02 16:11:20 </i>
 </div> <!-- id="about" -->
 </div> <!-- id="container" -->
 </body>
