@@ -221,6 +221,10 @@
 	<td class="summary">Creates a new audio object from DFPWM1a data.</td>
 	</tr>
 	<tr>
+	<td class="name" nowrap><a href="#mdfpwm">mdfpwm (data)</a></td>
+	<td class="summary">Creates a new audio object from MDFPWMv3 data.</td>
+	</tr>
+	<tr>
 	<td class="name" nowrap><a href="#wav">wav (data)</a></td>
 	<td class="summary">Creates a new audio object from a WAV file.</td>
 	</tr>
@@ -271,6 +275,10 @@
 	<tr>
 	<td class="name" nowrap><a href="#aukit.stream.dfpwm">aukit.stream.dfpwm (data, sampleRate, channels, mono)</a></td>
 	<td class="summary">Returns an iterator to stream audio from DFPWM data.</td>
+	</tr>
+	<tr>
+	<td class="name" nowrap><a href="#aukit.stream.mdfpwm">aukit.stream.mdfpwm (data, mono)</a></td>
+	<td class="summary">Returns an iterator to stream audio from MDFPWMv3 data.</td>
 	</tr>
 	<tr>
 	<td class="name" nowrap><a href="#aukit.stream.msadpcm">aukit.stream.msadpcm (input, blockAlign, channels, sampleRate, mono, coefficients)</a></td>
@@ -477,8 +485,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">number</span></span>
-        _ The audio length
+        number _ The audio length
     </ol>
 
 
@@ -497,8 +504,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">number</span></span>
-        _ The number of channels
+        number _ The number of channels
     </ol>
 
 
@@ -517,8 +523,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">sampleRate</span>
-            <span class="types"><span class="type">number</span></span>
-         The new sample rate in Hertz
+         number The new sample rate in Hertz
         </li>
         <li><span class="parameter">interpolation</span>
         ? "none"|"linear"|"cubic" The interpolation mode to use
@@ -528,8 +533,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ A new audio object with the resampled data
+        Audio _ A new audio object with the resampled data
     </ol>
 
 
@@ -548,8 +552,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ A new audio object with the audio mixed to mono
+        Audio _ A new audio object with the audio mixed to mono
     </ol>
 
 
@@ -576,8 +579,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ The new concatenated audio object
+        Audio _ The new concatenated audio object
     </ol>
 
 
@@ -606,8 +608,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ The new split audio object
+        Audio _ The new split audio object
     </ol>
 
 
@@ -635,8 +636,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ The new combined audio object
+        Audio _ The new combined audio object
     </ol>
 
 
@@ -662,8 +662,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        ... The new audio objects created from the channels in each list
+        Audio ... The new audio objects created from the channels in each list
     </ol>
 
 
@@ -691,8 +690,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">amplifier</span>
-            <span class="types"><span class="type">number</span></span>
-         |Audio The multiplier to apply, or the first audio object
+         number|Audio The multiplier to apply, or the first audio object
         </li>
         <li><span class="parameter">...</span>
          Audio The objects to mix with this one
@@ -702,8 +700,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ The new mixed audio object
+        Audio _ The new mixed audio object
     </ol>
 
 
@@ -721,16 +718,14 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">count</span>
-            <span class="types"><span class="type">number</span></span>
-         The number of times to play the audio
+         number The number of times to play the audio
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ The repeated audio
+        Audio _ The repeated audio
     </ol>
 
 
@@ -749,8 +744,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ The reversed audio
+        Audio _ The reversed audio
     </ol>
 
 
@@ -781,8 +775,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">number</span></span>
-        []|nil ... The resulting audio data
+        number[]|nil ... The resulting audio data
     </ol>
 
 
@@ -814,13 +807,11 @@
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><a class="type" href="index.html#fun">fun</a></span>
-        ():number[][]|nil,number|nil _ An iterator function that returns
+         fun():number[][]|nil,number|nil _ An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
-           <span class="types"><span class="type">number</span></span>
-        _ The total length of the audio in seconds</li>
+        number _ The total length of the audio in seconds</li>
     </ol>
 
 
@@ -845,8 +836,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-        _ The resulting WAV file data
+        string _ The resulting WAV file data
     </ol>
 
 
@@ -873,8 +863,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-        ... The resulting DFPWM data for each channel (only one string
+        string ... The resulting DFPWM data for each channel (only one string
  if `interleaved` is true)
     </ol>
 
@@ -897,8 +886,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         |table The audio data, either as a raw string, or a table
+         string|table The audio data, either as a raw string, or a table
  of values (in the format specified by `bitDepth` and `dataType`)
         </li>
         <li><span class="parameter">bitDepth</span>
@@ -924,8 +912,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ A new audio object containing the specified data
+        Audio _ A new audio object containing the specified data
     </ol>
 
 
@@ -943,8 +930,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         |table The audio data, either as a raw string, or a table of nibbles
+         string|table The audio data, either as a raw string, or a table of nibbles
         </li>
         <li><span class="parameter">channels</span>
         ? number The number of channels present in the audio
@@ -970,8 +956,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ A new audio object containing the decoded data
+        Audio _ A new audio object containing the decoded data
     </ol>
 
 
@@ -989,12 +974,10 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         The audio data as a raw string
+         string The audio data as a raw string
         </li>
         <li><span class="parameter">blockAlign</span>
-            <span class="types"><span class="type">number</span></span>
-         The number of bytes in each block
+         number The number of bytes in each block
         </li>
         <li><span class="parameter">channels</span>
         ? number The number of channels present in the audio
@@ -1010,8 +993,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ A new audio object containing the decoded data
+        Audio _ A new audio object containing the decoded data
     </ol>
 
 
@@ -1029,12 +1011,10 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         The audio data as a raw string
+         string The audio data as a raw string
         </li>
         <li><span class="parameter">ulaw</span>
-            <span class="types"><span class="type">boolean</span></span>
-         Whether the audio uses u-law (true) or A-law (false).
+         boolean Whether the audio uses u-law (true) or A-law (false).
         </li>
         <li><span class="parameter">channels</span>
         ? number The number of channels present in the audio
@@ -1047,8 +1027,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ A new audio object containing the decoded data
+        Audio _ A new audio object containing the decoded data
     </ol>
 
 
@@ -1067,8 +1046,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         The audio data as a raw string
+         string The audio data as a raw string
         </li>
         <li><span class="parameter">channels</span>
         ? number The number of channels present in the audio
@@ -1081,8 +1059,32 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ A new audio object containing the decoded data
+        Audio _ A new audio object containing the decoded data
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "mdfpwm"></a>
+    <strong>mdfpwm (data)</strong>
+    </dt>
+    <dd>
+    Creates a new audio object from MDFPWMv3 data.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">data</span>
+         string The audio data as a raw string
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+
+        Audio _ A new audio object containing the decoded data
     </ol>
 
 
@@ -1096,22 +1098,20 @@
     <dd>
     Creates a new audio object from a WAV file.  This accepts PCM files up to 32
  bits, including float data, as well as DFPWM files [as specified here](https://gist.github.com/MCJack123/90c24b64c8e626c7f130b57e9800962c),
- plus IMA and Microsoft ADPCM formats.
+ plus IMA and Microsoft ADPCM formats and G.711 u-law/A-law.
 
 
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         The WAV data to load
+         string The WAV data to load
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ A new audio object with the contents of the WAV file
+        Audio _ A new audio object with the contents of the WAV file
     </ol>
 
 
@@ -1129,16 +1129,14 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         The AIFF data to load
+         string The AIFF data to load
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ A new audio object with the contents of the AIFF file
+        Audio _ A new audio object with the contents of the AIFF file
     </ol>
 
 
@@ -1156,16 +1154,14 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         The AU data to load
+         string The AU data to load
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ A new audio object with the contents of the AU file
+        Audio _ A new audio object with the contents of the AU file
     </ol>
 
 
@@ -1183,16 +1179,14 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         The FLAC data to load
+         string The FLAC data to load
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ A new audio object with the contents of the FLAC file
+        Audio _ A new audio object with the contents of the FLAC file
     </ol>
 
 
@@ -1210,8 +1204,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">duration</span>
-            <span class="types"><span class="type">number</span></span>
-         The length of the audio in seconds
+         number The length of the audio in seconds
         </li>
         <li><span class="parameter">channels</span>
         ? number The number of channels present in the audio
@@ -1224,8 +1217,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ The new empty audio object
+        Audio _ The new empty audio object
     </ol>
 
 
@@ -1243,12 +1235,10 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">frequency</span>
-            <span class="types"><span class="type">number</span></span>
-         The frequency of the tone in Hertz
+         number The frequency of the tone in Hertz
         </li>
         <li><span class="parameter">duration</span>
-            <span class="types"><span class="type">number</span></span>
-         The length of the audio in seconds
+         number The length of the audio in seconds
         </li>
         <li><span class="parameter">amplitude</span>
         ? number The amplitude of the audio from 0.0 to 1.0
@@ -1270,8 +1260,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ A new audio object with the tone
+        Audio _ A new audio object with the tone
     </ol>
 
 
@@ -1289,8 +1278,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">duration</span>
-            <span class="types"><span class="type">number</span></span>
-         The length of the audio in seconds
+         number The length of the audio in seconds
         </li>
         <li><span class="parameter">amplitude</span>
         ? number The amplitude of the audio from 0.0 to 1.0
@@ -1306,8 +1294,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ A new audio object with noise
+        Audio _ A new audio object with noise
     </ol>
 
 
@@ -1325,8 +1312,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><span class="type">number</span></span>
-         [] The PCM data to pack
+         number[] The PCM data to pack
         </li>
         <li><span class="parameter">bitDepth</span>
         ? number The bit depth of the audio (8, 16, 24, 32); if `dataType` is "float" then this must be 32
@@ -1342,8 +1328,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-        _ The packed PCM data
+        string _ The packed PCM data
     </ol>
 
 
@@ -1362,11 +1347,10 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">callback</span>
-            <span class="types"><span class="type">function</span></span>
-         ():number[][] The iterator function that returns each chunk
+         fun():number[][] The iterator function that returns each chunk
         </li>
         <li><span class="parameter">progress</span>
-        ? function(pos:number) A callback to report progress to
+        ? fun(pos:number) A callback to report progress to
  the caller; if omitted then this argument is the first speaker
         </li>
         <li><span class="parameter">volume</span>
@@ -1397,18 +1381,16 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         The audio file to check
+         string The audio file to check
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
         <li>
-        "pcm"|"dfpwm"|"wav"|"aiff"|"au"|"flac"|nil _ The type of audio file detected, or `nil` if none could be found</li>
+        "pcm"|"dfpwm"|"mdfpwm"|"wav"|"aiff"|"au"|"flac"|nil _ The type of audio file detected, or `nil` if none could be found</li>
         <li>
-           <span class="types"><span class="type">number</span></span>
-        |nil _ The bit depth for PCM data, if the type is "pcm" and the bit depth can be detected</li>
+        number|nil _ The bit depth for PCM data, if the type is "pcm" and the bit depth can be detected</li>
         <li>
         "signed"|"unsigned"|"float"|nil _ The data type for PCM data, if the type is "pcm" and the type can be detected</li>
     </ol>
@@ -1434,8 +1416,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         |table|function The audio data, either as a raw string, a
+         string|table|function The audio data, either as a raw string, a
  table of values (in the format specified by `bitDepth` and `dataType`), or a
  function that returns either of those types. Functions will be called at
  least once before returning to get the type of data to use.
@@ -1463,13 +1444,11 @@
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><a class="type" href="index.html#fun">fun</a></span>
-        ():number[][]|nil,number|nil _ An iterator function that returns
+         fun():number[][]|nil,number|nil _ An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
-           <span class="types"><span class="type">number</span></span>
-        _ The total length of the audio in seconds, or the length of
+        number _ The total length of the audio in seconds, or the length of
  the first chunk if using a function</li>
     </ol>
 
@@ -1490,8 +1469,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         |function():string The DFPWM data to decode, or a function
+         string|fun():string The DFPWM data to decode, or a function
  returning chunks to decode
         </li>
         <li><span class="parameter">sampleRate</span>
@@ -1508,13 +1486,45 @@
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><a class="type" href="index.html#fun">fun</a></span>
-        ():number[][]|nil,number|nil _ An iterator function that returns
+         fun():number[][]|nil,number|nil _ An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
-           <span class="types"><span class="type">number</span></span>
-        |nil _ The total length of the audio in seconds, or nil if data
+        number|nil _ The total length of the audio in seconds, or nil if data
+ is a function</li>
+    </ol>
+
+
+
+
+</dd>
+    <dt>
+    <a name = "aukit.stream.mdfpwm"></a>
+    <strong>aukit.stream.mdfpwm (data, mono)</strong>
+    </dt>
+    <dd>
+    Returns an iterator to stream audio from MDFPWMv3 data.
+
+
+    <h3>Parameters:</h3>
+    <ul>
+        <li><span class="parameter">data</span>
+         string|fun():string The MDFPWM data to decode, or a function
+ returning chunks to decode
+        </li>
+        <li><span class="parameter">mono</span>
+        ? boolean Whether to mix the audio down to mono
+        </li>
+    </ul>
+
+    <h3>Returns:</h3>
+    <ol>
+        <li>
+         fun():number[][]|nil,number|nil _ An iterator function that returns
+ chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
+ the current position of the audio in seconds</li>
+        <li>
+        number|nil _ The total length of the audio in seconds, or nil if data
  is a function</li>
     </ol>
 
@@ -1534,13 +1544,11 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">input</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         |function():string The audio data as a raw string or
+         string|fun():string The audio data as a raw string or
  reader function
         </li>
         <li><span class="parameter">blockAlign</span>
-            <span class="types"><span class="type">number</span></span>
-         The number of bytes in each block
+         number The number of bytes in each block
         </li>
         <li><span class="parameter">channels</span>
         ? number The number of channels present in the audio
@@ -1559,13 +1567,11 @@
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><a class="type" href="index.html#fun">fun</a></span>
-        ():number[][]|nil,number|nil _ An iterator function that returns
+         fun():number[][]|nil,number|nil _ An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
-           <span class="types"><span class="type">number</span></span>
-        |nil _ The total length of the audio in seconds, or nil if data
+        number|nil _ The total length of the audio in seconds, or nil if data
  is a function</li>
     </ol>
 
@@ -1587,13 +1593,11 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">input</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         |function():string The audio data as a raw string or
+         string|fun():string The audio data as a raw string or
  reader function
         </li>
         <li><span class="parameter">blockAlign</span>
-            <span class="types"><span class="type">number</span></span>
-         The number of bytes in each block
+         number The number of bytes in each block
         </li>
         <li><span class="parameter">channels</span>
         ? number The number of channels present in the audio
@@ -1609,13 +1613,11 @@
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><a class="type" href="index.html#fun">fun</a></span>
-        ():number[][]|nil,number|nil _ An iterator function that returns
+         fun():number[][]|nil,number|nil _ An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
-           <span class="types"><span class="type">number</span></span>
-        |nil _ The total length of the audio in seconds, or nil if data
+        number|nil _ The total length of the audio in seconds, or nil if data
  is a function</li>
     </ol>
 
@@ -1635,13 +1637,11 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">input</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         |function():string The audio data as a raw string or
+         string|fun():string The audio data as a raw string or
  reader function
         </li>
         <li><span class="parameter">ulaw</span>
-            <span class="types"><span class="type">boolean</span></span>
-         Whether the audio uses u-law (true) or A-law (false).
+         boolean Whether the audio uses u-law (true) or A-law (false).
         </li>
         <li><span class="parameter">channels</span>
         ? number The number of channels present in the audio
@@ -1657,13 +1657,11 @@
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><a class="type" href="index.html#fun">fun</a></span>
-        ():number[][]|nil,number|nil _ An iterator function that returns
+         fun():number[][]|nil,number|nil _ An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
-           <span class="types"><span class="type">number</span></span>
-        |nil _ The total length of the audio in seconds, or nil if data
+        number|nil _ The total length of the audio in seconds, or nil if data
  is a function</li>
     </ol>
 
@@ -1684,8 +1682,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         |function():string The WAV file to decode, or a function
+         string|fun():string The WAV file to decode, or a function
  returning chunks to decode (the first chunk MUST contain the ENTIRE header)
         </li>
         <li><span class="parameter">mono</span>
@@ -1700,13 +1697,11 @@
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><a class="type" href="index.html#fun">fun</a></span>
-        ():number[][]|nil,number|nil _ An iterator function that returns
+         fun():number[][]|nil,number|nil _ An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
-           <span class="types"><span class="type">number</span></span>
-        |nil _ The total length of the audio in seconds</li>
+        number|nil _ The total length of the audio in seconds</li>
     </ol>
 
 
@@ -1725,8 +1720,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         |function():string The AIFF file to decode, or a function
+         string|fun():string The AIFF file to decode, or a function
  returning chunks to decode (the first chunk MUST contain the ENTIRE header)
         </li>
         <li><span class="parameter">mono</span>
@@ -1741,13 +1735,11 @@
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><a class="type" href="index.html#fun">fun</a></span>
-        ():number[][]|nil,number|nil _ An iterator function that returns
+         fun():number[][]|nil,number|nil _ An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
-           <span class="types"><span class="type">number</span></span>
-        _ The total length of the audio in seconds</li>
+        number _ The total length of the audio in seconds</li>
     </ol>
 
 
@@ -1766,8 +1758,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         |function():string The AU file to decode, or a function
+         string|fun():string The AU file to decode, or a function
  returning chunks to decode (the first chunk MUST contain the ENTIRE header)
         </li>
         <li><span class="parameter">mono</span>
@@ -1782,13 +1773,11 @@
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><a class="type" href="index.html#fun">fun</a></span>
-        ():number[][]|nil,number|nil _ An iterator function that returns
+         fun():number[][]|nil,number|nil _ An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
-           <span class="types"><span class="type">number</span></span>
-        _ The total length of the audio in seconds</li>
+        number _ The total length of the audio in seconds</li>
     </ol>
 
 
@@ -1807,8 +1796,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">data</span>
-            <span class="types"><a class="type" href="https://www.lua.org/manual/5.1/manual.html#5.4">string</a></span>
-         |function():string The FLAC file to decode, or a function
+         string|fun():string The FLAC file to decode, or a function
  returning chunks to decode
         </li>
         <li><span class="parameter">mono</span>
@@ -1819,13 +1807,11 @@
     <h3>Returns:</h3>
     <ol>
         <li>
-           <span class="types"><a class="type" href="index.html#fun">fun</a></span>
-        ():number[][]|nil,number|nil _ An iterator function that returns
+         fun():number[][]|nil,number|nil _ An iterator function that returns
  chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
  the current position of the audio in seconds</li>
         <li>
-           <span class="types"><span class="type">number</span></span>
-        _ The total length of the audio in seconds</li>
+        number _ The total length of the audio in seconds</li>
     </ol>
 
 
@@ -1847,20 +1833,17 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><span class="type">Audio</span></span>
-         The audio to modify
+         Audio The audio to modify
         </li>
         <li><span class="parameter">multiplier</span>
-            <span class="types"><span class="type">number</span></span>
-         The multiplier to apply
+         number The multiplier to apply
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ The audio modified
+        Audio _ The audio modified
     </ol>
 
 
@@ -1879,20 +1862,17 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><span class="type">Audio</span></span>
-         The audio to modify
+         Audio The audio to modify
         </li>
         <li><span class="parameter">multiplier</span>
-            <span class="types"><span class="type">number</span></span>
-         The multiplier to apply
+         number The multiplier to apply
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ The audio modified
+        Audio _ The audio modified
     </ol>
 
 
@@ -1910,32 +1890,26 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><span class="type">Audio</span></span>
-         The audio to modify
+         Audio The audio to modify
         </li>
         <li><span class="parameter">startTime</span>
-            <span class="types"><span class="type">number</span></span>
-         The start time of the fade, in seconds
+         number The start time of the fade, in seconds
         </li>
         <li><span class="parameter">startAmplitude</span>
-            <span class="types"><span class="type">number</span></span>
-         The amplitude of the beginning of the fade
+         number The amplitude of the beginning of the fade
         </li>
         <li><span class="parameter">endTime</span>
-            <span class="types"><span class="type">number</span></span>
-         The end time of the fade, in seconds
+         number The end time of the fade, in seconds
         </li>
         <li><span class="parameter">endAmplitude</span>
-            <span class="types"><span class="type">number</span></span>
-         The amplitude of the end of the fade
+         number The amplitude of the end of the fade
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ The audio modified
+        Audio _ The audio modified
     </ol>
 
 
@@ -1953,16 +1927,14 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><span class="type">Audio</span></span>
-         The audio to modify
+         Audio The audio to modify
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ The audio modified
+        Audio _ The audio modified
     </ol>
 
 
@@ -1980,8 +1952,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><span class="type">Audio</span></span>
-         The audio to modify
+         Audio The audio to modify
         </li>
         <li><span class="parameter">peakAmplitude</span>
         ? number The maximum amplitude
@@ -1994,8 +1965,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ The audio modified
+        Audio _ The audio modified
     </ol>
 
 
@@ -2013,16 +1983,14 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><span class="type">Audio</span></span>
-         The audio to modify
+         Audio The audio to modify
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ The audio modified
+        Audio _ The audio modified
     </ol>
 
 
@@ -2040,8 +2008,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><span class="type">Audio</span></span>
-         The audio to modify
+         Audio The audio to modify
         </li>
         <li><span class="parameter">threshold</span>
         ? number The maximum value to register as silence
@@ -2051,8 +2018,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ The audio modified
+        Audio _ The audio modified
     </ol>
 
 
@@ -2070,12 +2036,10 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><span class="type">Audio</span></span>
-         The audio to modify
+         Audio The audio to modify
         </li>
         <li><span class="parameter">delay</span>
-            <span class="types"><span class="type">number</span></span>
-         The amount of time to delay for, in seconds
+         number The amount of time to delay for, in seconds
         </li>
         <li><span class="parameter">multiplier</span>
         ? number The multiplier to apply to the delayed audio
@@ -2085,8 +2049,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ The audio modified
+        Audio _ The audio modified
     </ol>
 
 
@@ -2104,8 +2067,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><span class="type">Audio</span></span>
-         The audio to modify
+         Audio The audio to modify
         </li>
         <li><span class="parameter">delay</span>
         ? number The amount of time to echo after, in seconds
@@ -2118,8 +2080,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ The audio modified
+        Audio _ The audio modified
     </ol>
 
 
@@ -2137,8 +2098,7 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><span class="type">Audio</span></span>
-         The audio to modify
+         Audio The audio to modify
         </li>
         <li><span class="parameter">delay</span>
         ? number The amount of time to reverb after, in **milliseconds**
@@ -2157,8 +2117,7 @@
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ The audio modified
+        Audio _ The audio modified
     </ol>
 
 
@@ -2176,20 +2135,17 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><span class="type">Audio</span></span>
-         The audio to modify
+         Audio The audio to modify
         </li>
         <li><span class="parameter">frequency</span>
-            <span class="types"><span class="type">number</span></span>
-         The cutoff frequency for the filter
+         number The cutoff frequency for the filter
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ The audio modified
+        Audio _ The audio modified
     </ol>
 
 
@@ -2207,20 +2163,17 @@
     <h3>Parameters:</h3>
     <ul>
         <li><span class="parameter">audio</span>
-            <span class="types"><span class="type">Audio</span></span>
-         The audio to modify
+         Audio The audio to modify
         </li>
         <li><span class="parameter">frequency</span>
-            <span class="types"><span class="type">number</span></span>
-         The cutoff frequency for the filter
+         number The cutoff frequency for the filter
         </li>
     </ul>
 
     <h3>Returns:</h3>
     <ol>
 
-           <span class="types"><span class="type">Audio</span></span>
-        _ The audio modified
+        Audio _ The audio modified
     </ol>
 
 
@@ -2234,7 +2187,7 @@
 </div> <!-- id="main" -->
 <div id="about">
 <i>generated by <a href="http://github.com/lunarmodules/LDoc">LDoc 1.5.0</a></i>
-<i style="float:right;">Last updated 2023-08-02 16:11:20 </i>
+<i style="float:right;">Last updated 2024-02-12 22:08:59 </i>
 </div> <!-- id="about" -->
 </div> <!-- id="container" -->
 </body>
