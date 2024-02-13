@@ -64,7 +64,7 @@
 
 --- MIT License
 --
---- Copyright (c) 2021-2023 JackMacWindows
+--- Copyright (c) 2021-2024 JackMacWindows
 --
 --- Permission is hereby granted, free of charge, to any person obtaining a copy
 --- of this software and associated documentation files (the "Software"), to deal
@@ -104,7 +104,7 @@ end})
 aukit.effects, aukit.stream = {}, {}
 
 ---@tfield string _VERSION The version of AUKit that is loaded. This follows [SemVer](https://semver.org) format.
-aukit._VERSION = "1.7.0"
+aukit._VERSION = "1.8.0"
 
 ---@tfield "none"|"linear"|"cubic"|"sinc" defaultInterpolation Default interpolation mode for @{Audio:resample} and other functions that need to resample.
 aukit.defaultInterpolation = "linear"
@@ -1382,9 +1382,37 @@ function aukit.dfpwm(data, channels, sampleRate)
     return aukit.pcm(audio, 8, "signed", channels, sampleRate, true, false)
 end
 
+--- Creates a new audio object from MDFPWMv3 data.
+---@param data string The audio data as a raw string
+---@return Audio _ A new audio object containing the decoded data
+function aukit.mdfpwm(data)
+    expect(1, data, "string")
+    if data:sub(1, 7) ~= "MDFPWM\3" then error("bad argument #1 (not a MDFPWM file)", 2) end
+    local audio = {}
+    local decoderL, decoderR = dfpwm.make_decoder(), dfpwm.make_decoder()
+    local length, artist, title, album, pos = ("<Is1s1s1"):unpack(data, 8)
+    local last = 0
+    local start = os_epoch "utc"
+    while pos <= #data do
+        if os_epoch "utc" - start > 3000 then start = os_epoch "utc" sleep(0) end
+        local tempL = decoderL(str_sub(data, pos, pos + 6000))
+        if tempL == nil or #tempL == 0 then break end
+        for i = 1, #tempL do audio[last+i*2-1] = tempL[i] end
+        local tempR = decoderR(str_sub(data, pos + 6001, pos + 12000))
+        if tempR == nil or #tempR == 0 then break end
+        for i = 1, #tempR do audio[last+i*2] = tempR[i] end
+        last = last + #tempL + #tempR
+        pos = pos + 12000
+    end
+    for i = length + 1, #audio do audio[i] = nil end
+    local obj = aukit.pcm(audio, 8, "signed", 2, 48000, true, false)
+    obj.metadata = {artist = artist, title = title, album = album}
+    return obj
+end
+
 --- Creates a new audio object from a WAV file. This accepts PCM files up to 32
 --- bits, including float data, as well as DFPWM files [as specified here](https://gist.github.com/MCJack123/90c24b64c8e626c7f130b57e9800962c),
---- plus IMA and Microsoft ADPCM formats.
+--- plus IMA and Microsoft ADPCM formats and G.711 u-law/A-law.
 ---@param data string The WAV data to load
 ---@return Audio _ A new audio object with the contents of the WAV file
 function aukit.wav(data)
@@ -1693,8 +1721,8 @@ end
 
 --- Plays back stream functions created by one of the @{aukit.stream} functions
 --- or @{Audio:stream}.
----@param callback function():number[][] The iterator function that returns each chunk
----@param progress? function(pos:number) A callback to report progress to
+---@param callback fun():number[][] The iterator function that returns each chunk
+---@param progress? fun(pos:number) A callback to report progress to
 --- the caller; if omitted then this argument is the first speaker
 ---@param volume? number The volume to play the audio at; if omitted then
 --- this argument is the second speaker (if provided)
@@ -1823,7 +1851,7 @@ local datafmts = {
 --- headers. It is not recommended to rely on the data type/bit depth reported
 --- for PCM files - they are merely a suggestion.
 ---@param data string The audio file to check
----@return "pcm"|"dfpwm"|"wav"|"aiff"|"au"|"flac"|nil _ The type of audio file detected, or `nil` if none could be found
+---@return "pcm"|"dfpwm"|"mdfpwm"|"wav"|"aiff"|"au"|"flac"|nil _ The type of audio file detected, or `nil` if none could be found
 ---@return number|nil _ The bit depth for PCM data, if the type is "pcm" and the bit depth can be detected
 ---@return "signed"|"unsigned"|"float"|nil _ The data type for PCM data, if the type is "pcm" and the type can be detected
 function aukit.detect(data)
@@ -1832,6 +1860,7 @@ function aukit.detect(data)
     elseif data:match "^FORM....AIF[FC]" then return "aiff"
     elseif data:match "^%.snd" then return "au"
     elseif data:match "^fLaC" then return "flac"
+    elseif data:match "^MDFPWM\3" then return "mdfpwm"
     else
         -- Detect data type otherwise
         -- This expects the start or end of the audio to be (near) silence
@@ -2097,7 +2126,7 @@ end
 --- Returns an iterator to stream audio from DFPWM data. Audio will automatically
 --- be resampled to 48 kHz. Multiple channels are expected to be interleaved in
 --- the encoded DFPWM data.
----@param data string|function():string The DFPWM data to decode, or a function
+---@param data string|fun():string The DFPWM data to decode, or a function
 --- returning chunks to decode
 ---@param sampleRate? number The sample rate of the audio in Hertz
 ---@param channels? number The number of channels present in the audio
@@ -2166,9 +2195,83 @@ function aukit.stream.dfpwm(data, sampleRate, channels, mono)
     end, isstr and #data * 8 / sampleRate / channels or nil
 end
 
+--- Returns an iterator to stream audio from MDFPWMv3 data.
+---@param data string|fun():string The MDFPWM data to decode, or a function
+--- returning chunks to decode
+---@param mono? boolean Whether to mix the audio down to mono
+---@return fun():number[][]|nil,number|nil _ An iterator function that returns
+--- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
+--- the current position of the audio in seconds
+---@return number|nil _ The total length of the audio in seconds, or nil if data
+--- is a function
+function aukit.stream.mdfpwm(data, mono)
+    expect(1, data, "string", "function")
+    local decoderL, decoderR = dfpwm.make_decoder(), dfpwm.make_decoder()
+    local isstr = type(data) == "string"
+    local pos = 1
+    local headerSize = 0
+    local length
+    local buf = ""
+    if isstr then
+        if data:sub(1, 7) ~= "MDFPWM\3" then error("bad argument #1 (invalid MDFPWM data)", 2) end
+        length, _, _, _, pos = str_unpack("<Is1s1s1", data, 8)
+        headerSize = pos - 1
+    else
+        repeat buf = buf .. data()
+        until pcall(string.unpack, "<c7Is1s1s1", buf)
+        if str_sub(buf, 1, 7) ~= "MDFPWM\3" then error("bad argument #1 (invalid MDFPWM data)", 2) end
+        length, _, _, _, pos = str_unpack("<Is1s1s1", buf, 8)
+        buf = str_sub(buf, pos)
+        pos = 1
+    end
+    return function()
+        local dL, dR
+        if isstr then
+            if pos > #data then return nil end
+            dL = str_sub(data, pos, pos + 12000)
+            dR = str_sub(data, pos + 6001, pos + 12000)
+        else
+            while #buf < 12000 do
+                local chunk = data()
+                if not chunk then
+                    if #buf == 0 then return nil
+                    else break end
+                end
+                buf = buf .. chunk
+            end
+            dL = str_sub(buf, 1, 6000)
+            dR = str_sub(buf, 6001, 12000)
+            buf = str_sub(buf, 12001)
+        end
+        local audioL = decoderL(str_sub(dL, 1, 6000))
+        if audioL == nil or #audioL == 0 then return nil end
+        local audioR = decoderR(str_sub(dR, 1, 6000))
+        if audioR == nil or #audioR == 0 then return nil end
+        os_queueEvent("nosleep")
+        repeat until "nosleep" == os_pullEvent()
+        if pos - headerSize + 12000 > length then
+            for i = (length / 2) % 6000 + 1, 6000 do
+                audioL[i], audioR[i] = nil
+            end
+        end
+        local lines
+        if mono then
+            lines = {{}}
+            for i = 1, 6000 do
+                lines[1][i] = clamp(math_floor(audioL[i] + audioR[i] / 2), -128, 127)
+            end
+        else lines = {audioL, audioR} end
+        os_queueEvent("nosleep")
+        repeat until "nosleep" == os_pullEvent()
+        local p = pos - headerSize
+        pos = pos + #audioL + #audioR
+        return lines, p / 12000
+    end, length / 12000
+end
+
 --- Returns an iterator to stream audio from Microsoft ADPCM data. Audio will
 --- automatically be resampled to 48 kHz.
----@param input string|function():string The audio data as a raw string or
+---@param input string|fun():string The audio data as a raw string or
 --- reader function
 ---@param blockAlign number The number of bytes in each block
 ---@param channels? number The number of channels present in the audio
@@ -2334,7 +2437,7 @@ end
 --- automatically be resampled to 48 kHz, and mixed to mono if desired. Data
 --- *must* be in the interleaving format used in WAV files (i.e. periodic blocks
 --- with 4/8-byte headers, channels alternating every 4 bytes, lower nibble first).
----@param input string|function():string The audio data as a raw string or
+---@param input string|fun():string The audio data as a raw string or
 --- reader function
 ---@param blockAlign number The number of bytes in each block
 ---@param channels? number The number of channels present in the audio
@@ -2431,7 +2534,7 @@ end
 
 --- Returns an iterator to stream data from u-law/A-law G.711 data. Audio will
 --- automatically be resampled to 48 kHz, and mixed to mono if desired.
----@param input string|function():string The audio data as a raw string or
+---@param input string|fun():string The audio data as a raw string or
 --- reader function
 ---@param ulaw boolean Whether the audio uses u-law (true) or A-law (false).
 ---@param channels? number The number of channels present in the audio
@@ -2510,7 +2613,7 @@ end
 --- Returns an iterator to stream audio from a WAV file. Audio will automatically
 --- be resampled to 48 kHz, and optionally mixed down to mono. This accepts PCM
 --- files up to 32 bits, including float data, as well as DFPWM files [as specified here](https://gist.github.com/MCJack123/90c24b64c8e626c7f130b57e9800962c).
----@param data string|function():string The WAV file to decode, or a function
+---@param data string|fun():string The WAV file to decode, or a function
 --- returning chunks to decode (the first chunk MUST contain the ENTIRE header)
 ---@param mono? boolean Whether to mix the audio to mono
 ---@param ignoreHeader? boolean Whether to ignore additional headers
@@ -2599,7 +2702,7 @@ end
 
 --- Returns an iterator to stream audio from an AIFF or AIFC file. Audio will
 --- automatically be resampled to 48 kHz, and optionally mixed down to mono.
----@param data string|function():string The AIFF file to decode, or a function
+---@param data string|fun():string The AIFF file to decode, or a function
 --- returning chunks to decode (the first chunk MUST contain the ENTIRE header)
 ---@param mono? boolean Whether to mix the audio to mono
 ---@param ignoreHeader? boolean Whether to ignore additional headers
@@ -2669,7 +2772,7 @@ end
 
 --- Returns an iterator to stream data from an AU file. Audio will automatically
 --- be resampled to 48 kHz, and optionally mixed down to mono.
----@param data string|function():string The AU file to decode, or a function
+---@param data string|fun():string The AU file to decode, or a function
 --- returning chunks to decode (the first chunk MUST contain the ENTIRE header)
 ---@param mono? boolean Whether to mix the audio to mono
 ---@param ignoreHeader? boolean Whether to ignore additional headers
@@ -2709,7 +2812,7 @@ end
 
 --- Returns an iterator to stream data from a FLAC file. Audio will automatically
 --- be resampled to 48 kHz, and optionally mixed down to mono.
----@param data string|function():string The FLAC file to decode, or a function
+---@param data string|fun():string The FLAC file to decode, or a function
 --- returning chunks to decode
 ---@param mono? boolean Whether to mix the audio to mono
 ---@return fun():number[][]|nil,number|nil _ An iterator function that returns

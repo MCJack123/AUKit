@@ -9,6 +9,7 @@ All sample rates and channel counts are supported. Functions to convert to Compu
 - Raw Microsoft ADPCM
 - Raw IMA ADPCM
 - Raw G.711, A-law or µ-law
+- MDFPWMv3
 - WAV, PCM, 8-bit, 16-bit, 24-bit, 32-bit, or float
 - WAV, DFPWM
 - WAV, Microsoft ADPCM
