@@ -556,7 +556,7 @@ local decodeFLAC do
         return true
     end
 
-    function decodeFLAC(inp, callback)
+    function decodeFLAC(inp, callback, head)
         local out = {}
         local pos = 1
         -- Handle FLAC header and metadata blocks
@@ -600,6 +600,7 @@ local decodeFLAC do
         if callback then callback(sampleRate, numSamples) end
 
         -- Decode FLAC audio frames and write raw samples
+        if head then return {sampleRate = sampleRate, data = out, metadata = meta, info = {bitDepth = sampleDepth, dataType = "signed"}} end
         inp = BitInputStream(inp, pos)
         repeat until not decodeFrame(inp, numChannels, sampleDepth, out, callback)
         if not callback then return {sampleRate = sampleRate, data = out, metadata = meta, info = {bitDepth = sampleDepth, dataType = "signed"}} end
@@ -1384,13 +1385,19 @@ end
 
 --- Creates a new audio object from MDFPWMv3 data.
 ---@param data string The audio data as a raw string
+---@param head boolean Whether to only load metadata (header data) - this will not decode the audio
 ---@return Audio _ A new audio object containing the decoded data
-function aukit.mdfpwm(data)
+function aukit.mdfpwm(data, head)
     expect(1, data, "string")
     if data:sub(1, 7) ~= "MDFPWM\3" then error("bad argument #1 (not a MDFPWM file)", 2) end
+    local length, artist, title, album, pos = ("<Is1s1s1"):unpack(data, 8)
+    if head then
+        local obj = aukit.new(0, 2, 48000)
+        obj.metadata = {artist = artist, title = title, album = album}
+        return obj
+    end
     local audio = {}
     local decoderL, decoderR = dfpwm.make_decoder(), dfpwm.make_decoder()
-    local length, artist, title, album, pos = ("<Is1s1s1"):unpack(data, 8)
     local last = 0
     local start = os_epoch "utc"
     while pos <= #data do
@@ -1414,8 +1421,9 @@ end
 --- bits, including float data, as well as DFPWM files [as specified here](https://gist.github.com/MCJack123/90c24b64c8e626c7f130b57e9800962c),
 --- plus IMA and Microsoft ADPCM formats and G.711 u-law/A-law.
 ---@param data string The WAV data to load
+---@param head boolean Whether to only load metadata (header data) - this will not decode the audio
 ---@return Audio _ A new audio object with the contents of the WAV file
-function aukit.wav(data)
+function aukit.wav(data, head)
     expect(1, data, "string")
     local channels, sampleRate, bitDepth, length, dataType, blockAlign, coefficients
     local temp, pos = str_unpack("c4", data)
@@ -1424,6 +1432,7 @@ function aukit.wav(data)
     temp, pos = str_unpack("c4", data, pos)
     if temp ~= "WAVE" then error("bad argument #1 (not a WAV file)", 2) end
     local meta = {}
+    local obj
     while pos <= #data do
         local size
         temp, size, pos = str_unpack("<c4I", data, pos)
@@ -1466,8 +1475,8 @@ function aukit.wav(data)
         elseif temp == "data" then
             local data = str_sub(data, pos, pos + size - 1)
             if #data < size then error("invalid WAV file", 2) end
-            local obj
-            if dataType == "adpcm" then
+            if head then obj = aukit.new(0, channels, sampleRate)
+            elseif dataType == "adpcm" then
                 local blocks = {}
                 for n = 1, #data, blockAlign do
                     if channels == 2 then
@@ -1513,7 +1522,7 @@ function aukit.wav(data)
             else obj = aukit.pcm(data, bitDepth, dataType, channels, sampleRate, true, false) end
             obj.metadata = meta
             obj.info = {dataType = dataType, bitDepth = bitDepth}
-            return obj
+            pos = pos + size
         elseif temp == "fact" then
             -- TODO
             pos = pos + size
@@ -1530,13 +1539,15 @@ function aukit.wav(data)
             else pos = pos + size end
         else pos = pos + size end
     end
+    if obj then return obj end
     error("invalid WAV file", 2)
 end
 
 --- Creates a new audio object from an AIFF or AIFC file.
 ---@param data string The AIFF data to load
+---@param head boolean Whether to only load metadata (header data) - this will not decode the audio
 ---@return Audio _ A new audio object with the contents of the AIFF file
-function aukit.aiff(data)
+function aukit.aiff(data, head)
     expect(1, data, "string")
     local channels, sampleRate, bitDepth, length, offset, compression, blockAlign
     local isAIFC = false
@@ -1565,9 +1576,10 @@ function aukit.aiff(data)
         elseif temp == "SSND" then
             offset, blockAlign, pos = str_unpack(">II", data, pos)
             local data = str_sub(data, pos + offset, pos + offset + length - 1)
-            if #data < length then error("invalid AIFF file", 2) end
+            --if #data < length then error("invalid AIFF file", 2) end
             local obj
-            if compression == nil or compression == "NONE" then obj = aukit.pcm(data, bitDepth, "signed", channels, sampleRate, true, true)
+            if head then obj = aukit.new(0, channels, sampleRate)
+            elseif compression == nil or compression == "NONE" then obj = aukit.pcm(data, bitDepth, "signed", channels, sampleRate, true, true)
             elseif compression == "sowt" then obj = aukit.pcm(data, bitDepth, "signed", channels, sampleRate, true, false)
             elseif compression == "fl32" or compression == "FL32" then obj = aukit.pcm(data, 32, "float", channels, sampleRate, true, true)
             elseif compression == "alaw" or compression == "ulaw" or compression == "ALAW" or compression == "ULAW" then obj = aukit.g711(data, compression == "ulaw" or compression == "ULAW", channels, sampleRate)
@@ -1610,10 +1622,11 @@ end
 
 --- Creates a new audio object from a FLAC file.
 ---@param data string The FLAC data to load
+---@param head boolean Whether to only load metadata (header data) - this will not decode the audio
 ---@return Audio _ A new audio object with the contents of the FLAC file
-function aukit.flac(data)
+function aukit.flac(data, head)
     expect(1, data, "string")
-    return setmetatable(decodeFLAC(data), Audio_mt)
+    return setmetatable(decodeFLAC(data, nil, head), Audio_mt)
 end
 
 --- Creates a new empty audio object with the specified duration.
