@@ -1,20 +1,21 @@
---- AUKit: Audio decoding and processing framework for ComputerCraft
---
+--- AUKit: aukit.Audio decoding and processing framework for ComputerCraft
+--- @file
+---
 --- AUKit is a framework designed to simplify the process of loading, modifying,
 --- and playing audio files in various formats. It includes support for loading
 --- audio from many sources, including PCM, DFPWM, G.711, and ADPCM codecs, as
 --- well as WAV, AIFF, AU, and FLAC files. It can also generate audio on-the-fly
 --- as tones, noise, or silence.
---
---- AUKit uses a structure called Audio to store information about each audio
+---
+--- AUKit uses a structure called aukit.Audio to store information about each audio
 --- chunk. An audio object holds the sample rate of the audio, as well as the
---- data for each channel stored as floating-point numbers. Audio objects can
+--- data for each channel stored as floating-point numbers. aukit.Audio objects can
 --- hold any number of channels at any sample rate with any duration.
---
+---
 --- To obtain an audio object, you can use any of the main functions in the aukit
 --- module. These allow loading from various raw codecs or file formats, with
 --- data sources as strings, or tables if using a raw codec loader.
---
+---
 --- Once the audio is loaded, various basic operations are available. A subset of
 --- the string library is available to simplify operations on the audio, and a
 --- number of operators (+, *, .., #) are overridden as well. There's also built-
@@ -24,12 +25,12 @@
 --- back to PCM, DFPWM, or WAV data, allowing changes to be easily stored on disk.
 --- The stream function also automatically chunks data for use with a speaker.
 --- All of these functions return a new audio object, leaving the original intact.
---
+---
 --- There are also a number of effects available for audio. These are contained
 --- in the aukit.effects table, and modify the audio passed to them (as well as
 --- returning the audio for streamlining). The effects are intended to speed up
 --- common operations on audio. More effects may be added in future versions.
---
+---
 --- For simple audio playback tasks, the aukit.stream table provides a number of
 --- functions that can quickly decode audio for real-time playback. Each function
 --- returns an iterator function that can be called multiple times to obtain fully
@@ -41,41 +42,37 @@
 --- iterators can be passed directly to the aukit.play function, which complements
 --- the aukit.stream suite by playing the decoded audio on speakers while decoding
 --- it in real-time, handling synchronization of speakers as best as possible.
---
+---
 --- If you're really lazy, you can also call `aukit` as a function, which takes
 --- the path to a file, and plays this on all available speakers.
---
+---
 --- Be aware that processing large amounts of audio (especially loading FLAC or
 --- resampling with higher quality) is *very* slow. It's recommended to use audio
 --- files with lower data size (8-bit mono PCM/WAV/AIFF is ideal), and potentially
 --- a lower sample rate, to reduce the load on the system - especially as all
 --- data gets converted to 8-bit DFPWM data on playback anyway. The code yields
 --- internally when things take a long time to avoid abort timeouts.
---
+---
 --- For an example of how to use AUKit, see the accompanying auplay.lua file.
---
----@author JackMacWindows
----@license MIT
---
---- <style>#content {width: unset !important;}</style>
---
----@module aukit
----@set project=AUKit
-
+---
+--- @author JackMacWindows
+---
+--- @copyright
+---
 --- MIT License
---
+---
 --- Copyright (c) 2021-2024 JackMacWindows
---
+---
 --- Permission is hereby granted, free of charge, to any person obtaining a copy
 --- of this software and associated documentation files (the "Software"), to deal
 --- in the Software without restriction, including without limitation the rights
 --- to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 --- copies of the Software, and to permit persons to whom the Software is
 --- furnished to do so, subject to the following conditions:
---
+---
 --- The above copyright notice and this permission notice shall be included in all
 --- copies or substantial portions of the Software.
---
+---
 --- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 --- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 --- FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
@@ -93,7 +90,14 @@ local os_epoch, os_queueEvent, os_pullEvent = os.epoch, os.queueEvent, os.pullEv
 local str_pack, str_unpack, str_sub, str_byte, str_rep = string.pack, string.unpack, string.sub, string.byte, string.rep
 local table_pack, table_unpack, table_insert, table_remove = table.pack, table.unpack, table.insert, table.remove
 
-local aukit = setmetatable({}, {__call = function(aukit, path)
+--- The main AUKit module.
+---@class aukit
+---@field _VERSION string The version of AUKit that is loaded. This follows [SemVer](https://semver.org) format.
+---@field defaultInterpolation "none"|"linear"|"cubic"|"sinc" Default interpolation mode for `Audio.resample` and other functions that need to resample.
+local aukit = setmetatable({
+    _VERSION = "1.9.0",
+    defaultInterpolation = "linear"
+}, {__call = function(aukit, path)
     expect(1, path, "string")
     local file = assert(fs.open(path, "rb"))
     local type = aukit.detect(file.read(64)) or "dfpwm"
@@ -101,14 +105,20 @@ local aukit = setmetatable({}, {__call = function(aukit, path)
     aukit.play(aukit.stream[type](function() return file.read(48000) end), peripheral.find("speaker"))
     file.close()
 end})
-aukit.effects, aukit.stream = {}, {}
+--- Effects that can modify audio chunks.
+---@class aukit.effects
+aukit.effects = {}
+--- Loader functions for streaming audio from a remote resource. These are usually used with `aukit.play`.
+---@class aukit.stream
+aukit.stream = {}
 
----@tfield string _VERSION The version of AUKit that is loaded. This follows [SemVer](https://semver.org) format.
-aukit._VERSION = "1.8.0"
 
----@tfield "none"|"linear"|"cubic"|"sinc" defaultInterpolation Default interpolation mode for @{Audio:resample} and other functions that need to resample.
-aukit.defaultInterpolation = "linear"
-
+--- The aukit.Audio class represents a chunk of audio with variable channels and sample rate.
+---@class aukit.Audio
+---@field data number[][] The samples in each channel.
+---@field sampleRate number The sample rate of the audio.
+---@field metadata table Stores any metadata read from the file if present.
+---@field info Metadata Stores any decoder-specific information, including `bitDepth` and `dataType`.
 local Audio = {}
 local Audio_mt
 
@@ -623,22 +633,6 @@ end
 
 ---@alias Metadata {bitDepth: number|nil, dataType: string|nil}
 
---- The Audio class represents a chunk of audio with variable channels and sample rate.
----@class Audio
----@field data number[][] The samples in each channel.
----@field sampleRate number The sample rate of the audio.
----@field metadata table Stores any metadata read from the file if present.
----@field info Metadata Stores any decoder-specific information, including `bitDepth` and `dataType`.
-
----@tfield number sampleRate The sample rate of the audio.
-Audio.sampleRate = nil
-
----@tfield table metadata Stores any metadata read from the file if present.
-Audio.metadata = nil
-
----@tfield table info Stores any decoder-specific information, including `bitDepth` and `dataType`.
-Audio.info = nil
-
 --- Returns the length of the audio object in seconds.
 ---@return number _ The audio length
 function Audio:len()
@@ -655,7 +649,7 @@ end
 --- If the target rate is the same, the object is copied without modification.
 ---@param sampleRate number The new sample rate in Hertz
 ---@param interpolation? "none"|"linear"|"cubic" The interpolation mode to use
----@return Audio _ A new audio object with the resampled data
+---@return aukit.Audio _ A new audio object with the resampled data
 function Audio:resample(sampleRate, interpolation)
     expect(1, sampleRate, "number")
     interpolation = expect(2, interpolation, "string", "nil") or aukit.defaultInterpolation
@@ -679,7 +673,7 @@ function Audio:resample(sampleRate, interpolation)
 end
 
 --- Mixes down all channels to a new mono-channel audio object.
----@return Audio _ A new audio object with the audio mixed to mono
+---@return aukit.Audio _ A new audio object with the audio mixed to mono
 function Audio:mono()
     local new = setmetatable({sampleRate = self.sampleRate, data = {{}}, metadata = copy(self.metadata), info = copy(self.info)}, Audio_mt)
     local ndata = new.data[1]
@@ -697,8 +691,8 @@ end
 --- Concatenates this audio object with another, adding the contents of each
 --- new channel to the end of each old channel, resampling the new channels to match
 --- this one (if necessary), and inserting silence in any missing channels.
----@param ... Audio The audio objects to concatenate
----@return Audio _ The new concatenated audio object
+---@param ... aukit.Audio The audio objects to concatenate
+---@return aukit.Audio _ The new concatenated audio object
 function Audio:concat(...)
     local audios = {self, ...}
     local l = {#self.data[1]}
@@ -725,10 +719,10 @@ function Audio:concat(...)
 end
 
 --- Takes a subregion of the audio and returns a new audio object with its contents.
---- This takes the same arguments as @{string.sub}, but positions start at 0.
+--- This takes the same arguments as `string.sub`, but positions start at 0.
 ---@param start? number The start position of the audio in seconds
 ---@param last? number The end position of the audio in seconds (0 means end of file)
----@return Audio _ The new split audio object
+---@return aukit.Audio _ The new split audio object
 function Audio:sub(start, last)
     start = math_floor(expect(1, start, "number", "nil") or 0)
     last = math_floor(expect(2, last, "number", "nil") or 0)
@@ -752,8 +746,8 @@ end
 --- channels on the end of the new object, resampling the new channels to match
 --- this one (if necessary), and extending any channels that are shorter than the
 --- longest channel with zeroes.
----@param ... Audio The audio objects to combine with
----@return Audio _ The new combined audio object
+---@param ... aukit.Audio The audio objects to combine with
+---@return aukit.Audio _ The new combined audio object
 function Audio:combine(...)
     local audios = {self, ...}
     local len = #self.data[1]
@@ -778,7 +772,7 @@ end
 --- Splits this audio object into one or more objects with the specified channels.
 --- Passing a channel that doesn't exist will throw an error.
 ---@param ... number[] The lists of channels in each new object
----@return Audio ... The new audio objects created from the channels in each list
+---@return aukit.Audio ... The new audio objects created from the channels in each list
 ---@usage Split a stereo track into independent mono objects
 --
 ---     local left, right = stereo:split({1}, {2})
@@ -805,8 +799,8 @@ end
 --- zeroes at the end, and non-existent channels are replaced with all zeroes.
 --- Any audio objects with a different sample rate are resampled to match this one.
 ---@param amplifier number|Audio The multiplier to apply, or the first audio object
----@param ... Audio The objects to mix with this one
----@return Audio _ The new mixed audio object
+---@param ... aukit.Audio The objects to mix with this one
+---@return aukit.Audio _ The new mixed audio object
 function Audio:mix(amplifier, ...)
     local audios = {self, ...}
     local len = #self.data[1]
@@ -842,7 +836,7 @@ end
 
 --- Returns a new audio object that repeats this audio a number of times.
 ---@param count number The number of times to play the audio
----@return Audio _ The repeated audio
+---@return aukit.Audio _ The repeated audio
 function Audio:rep(count)
     if type(self) ~= "table" and type(count) == "table" then self, count = count, self end
     expect(1, count, "number")
@@ -859,7 +853,7 @@ function Audio:rep(count)
 end
 
 --- Returns a reversed version of this audio.
----@return Audio _ The reversed audio
+---@return aukit.Audio _ The reversed audio
 function Audio:reverse()
     local obj = setmetatable({sampleRate = self.sampleRate, data = {}, metadata = copy(self.metadata), info = copy(self.info)}, Audio_mt)
     for c = 1, #self.data do
@@ -916,7 +910,7 @@ function Audio:pcm(bitDepth, dataType, interleaved)
 end
 
 --- Returns a function that can be called to encode PCM samples in chunks.
---- This is useful as a for iterator, and can be used with @{aukit.play}.
+--- This is useful as a for iterator, and can be used with `aukit.play`.
 ---@param chunkSize? number The size of each chunk
 ---@param bitDepth? number The bit depth of the audio (8, 16, 24, 32)
 ---@param dataType? "signed"|"unsigned"|"float" The type of each sample
@@ -1004,7 +998,7 @@ end
 ]]
 
 --- aukit
----@section aukit
+--- @section aukit
 
 --- Creates a new audio object from the specified raw PCM data.
 ---@param data string|table The audio data, either as a raw string, or a table
@@ -1015,7 +1009,7 @@ end
 ---@param sampleRate? number The sample rate of the audio in Hertz
 ---@param interleaved? boolean Whether each channel is interleaved or separate
 ---@param bigEndian? boolean Whether the audio is big-endian or little-endian; ignored if data is a table
----@return Audio _ A new audio object containing the specified data
+---@return aukit.Audio _ A new audio object containing the specified data
 function aukit.pcm(data, bitDepth, dataType, channels, sampleRate, interleaved, bigEndian)
     expect(1, data, "string", "table")
     bitDepth = expect(2, bitDepth, "number", "nil") or 8
@@ -1149,7 +1143,7 @@ end
 ---@param interleaved? boolean Whether each channel is interleaved or separate
 ---@param predictor? number|table The initial predictor value(s)
 ---@param step_index? number|table The initial step index(es)
----@return Audio _ A new audio object containing the decoded data
+---@return aukit.Audio _ A new audio object containing the decoded data
 function aukit.adpcm(data, channels, sampleRate, topFirst, interleaved, predictor, step_index)
     expect(1, data, "string", "table")
     channels = expect(2, channels, "number", "nil") or 1
@@ -1249,7 +1243,7 @@ end
 ---@param channels? number The number of channels present in the audio
 ---@param sampleRate? number The sample rate of the audio in Hertz
 ---@param coefficients? table Two lists of coefficients to use
----@return Audio _ A new audio object containing the decoded data
+---@return aukit.Audio _ A new audio object containing the decoded data
 function aukit.msadpcm(data, blockAlign, channels, sampleRate, coefficients)
     expect(1, data, "string")
     expect(2, blockAlign, "number")
@@ -1327,7 +1321,7 @@ end
 ---@param ulaw boolean Whether the audio uses u-law (true) or A-law (false).
 ---@param channels? number The number of channels present in the audio
 ---@param sampleRate? number The sample rate of the audio in Hertz
----@return Audio _ A new audio object containing the decoded data
+---@return aukit.Audio _ A new audio object containing the decoded data
 function aukit.g711(data, ulaw, channels, sampleRate)
     expect(1, data, "string")
     expect(2, ulaw, "boolean")
@@ -1358,7 +1352,7 @@ end
 ---@param data string The audio data as a raw string
 ---@param channels? number The number of channels present in the audio
 ---@param sampleRate? number The sample rate of the audio in Hertz
----@return Audio _ A new audio object containing the decoded data
+---@return aukit.Audio _ A new audio object containing the decoded data
 function aukit.dfpwm(data, channels, sampleRate)
     expect(1, data, "string")
     channels = expect(2, channels, "number", "nil") or 1
@@ -1386,7 +1380,7 @@ end
 --- Creates a new audio object from MDFPWMv3 data.
 ---@param data string The audio data as a raw string
 ---@param head boolean Whether to only load metadata (header data) - this will not decode the audio
----@return Audio _ A new audio object containing the decoded data
+---@return aukit.Audio _ A new audio object containing the decoded data
 function aukit.mdfpwm(data, head)
     expect(1, data, "string")
     if data:sub(1, 7) ~= "MDFPWM\3" then error("bad argument #1 (not a MDFPWM file)", 2) end
@@ -1422,7 +1416,7 @@ end
 --- plus IMA and Microsoft ADPCM formats and G.711 u-law/A-law.
 ---@param data string The WAV data to load
 ---@param head boolean Whether to only load metadata (header data) - this will not decode the audio
----@return Audio _ A new audio object with the contents of the WAV file
+---@return aukit.Audio _ A new audio object with the contents of the WAV file
 function aukit.wav(data, head)
     expect(1, data, "string")
     local channels, sampleRate, bitDepth, length, dataType, blockAlign, coefficients
@@ -1546,7 +1540,7 @@ end
 --- Creates a new audio object from an AIFF or AIFC file.
 ---@param data string The AIFF data to load
 ---@param head boolean Whether to only load metadata (header data) - this will not decode the audio
----@return Audio _ A new audio object with the contents of the AIFF file
+---@return aukit.Audio _ A new audio object with the contents of the AIFF file
 function aukit.aiff(data, head)
     expect(1, data, "string")
     local channels, sampleRate, bitDepth, length, offset, compression, blockAlign
@@ -1605,7 +1599,7 @@ end
 
 --- Creates a new audio object from an AU file.
 ---@param data string The AU data to load
----@return Audio _ A new audio object with the contents of the AU file
+---@return aukit.Audio _ A new audio object with the contents of the AU file
 function aukit.au(data)
     expect(1, data, "string")
     local magic, offset, size, encoding, sampleRate, channels = str_unpack(">c4IIIII", data)
@@ -1623,7 +1617,7 @@ end
 --- Creates a new audio object from a FLAC file.
 ---@param data string The FLAC data to load
 ---@param head boolean Whether to only load metadata (header data) - this will not decode the audio
----@return Audio _ A new audio object with the contents of the FLAC file
+---@return aukit.Audio _ A new audio object with the contents of the FLAC file
 function aukit.flac(data, head)
     expect(1, data, "string")
     return setmetatable(decodeFLAC(data, nil, head), Audio_mt)
@@ -1633,7 +1627,7 @@ end
 ---@param duration number The length of the audio in seconds
 ---@param channels? number The number of channels present in the audio
 ---@param sampleRate? number The sample rate of the audio in Hertz
----@return Audio _ The new empty audio object
+---@return aukit.Audio _ The new empty audio object
 function aukit.new(duration, channels, sampleRate)
     expect(1, duration, "number")
     channels = expect(2, channels, "number", "nil") or 1
@@ -1657,7 +1651,7 @@ end
 ---@param duty? number The duty cycle of the square wave if selected; ignored otherwise
 ---@param channels? number The number of channels present in the audio
 ---@param sampleRate? number The sample rate of the audio in Hertz
----@return Audio _ A new audio object with the tone
+---@return aukit.Audio _ A new audio object with the tone
 function aukit.tone(frequency, duration, amplitude, waveType, duty, channels, sampleRate)
     expect(1, frequency, "number")
     expect(2, duration, "number")
@@ -1686,7 +1680,7 @@ end
 ---@param amplitude? number The amplitude of the audio from 0.0 to 1.0
 ---@param channels? number The number of channels present in the audio
 ---@param sampleRate? number The sample rate of the audio in Hertz
----@return Audio _ A new audio object with noise
+---@return aukit.Audio _ A new audio object with noise
 function aukit.noise(duration, amplitude, channels, sampleRate)
     expect(1, duration, "number")
     amplitude = expect(2, amplitude, "number", "nil") or 1
@@ -1732,9 +1726,9 @@ end
 
 ---@alias speaker {playAudio: fun(samples: number[], volume?: number)}
 
---- Plays back stream functions created by one of the @{aukit.stream} functions
---- or @{Audio:stream}.
----@param callback fun():number[][] The iterator function that returns each chunk
+--- Plays back stream functions created by one of the `aukit.stream` functions
+--- or `Audio.stream`.
+---@param callback fun():number[][]|nil The iterator function that returns each chunk
 ---@param progress? fun(pos:number) A callback to report progress to
 --- the caller; if omitted then this argument is the first speaker
 ---@param volume? number The volume to play the audio at; if omitted then
@@ -1847,6 +1841,145 @@ function aukit.play(callback, progress, volume, ...)
     end
 end
 
+--- An asynchronous player created by `aukit.player`.
+---@class aukit.Player
+---@field isPaused boolean Whether the player is paused.
+---@field position number The current position of the audio, in seconds
+---@field volume number The volume of the audio
+---@field loaderTask Task The task that is loading the audio
+---@field playerTask Task The task that is playing the audio
+---@field speakers speaker[] The speakers the audio is playing on
+---@field lastPlayback {pos:number,time:number} Internal playback positions for pausing
+---@field invalidate boolean Internal flag to invalidate current chunk
+local Player = {}
+local Player_mt = {__index = Player, __name = "aukit.player"}
+
+--- Pauses the player if it's playing.
+function Player:pause()
+    if self.isPaused then return end
+    if not self.playerTask then error("Player is stopped", 2) end
+    local time = os_epoch "utc"
+    self.isPaused = true
+    self.invalidate = true
+    for _, v in ipairs(self.speakers) do v.stop() end
+    self.position = (self.lastPlayback.pos + ((time - self.lastPlayback.time) * 48) - 1) / 48000
+end
+
+--- Plays the audio if it's paused.
+function Player:play()
+    if not self.isPaused then return end
+    if not self.playerTask then error("Player is stopped", 2) end
+    self.isPaused = false
+end
+
+--- Returns the estimated current position of audio playback.
+---@return number pos The position of the audio, in seconds
+function Player:livePosition()
+    if not self.playerTask then error("Player is stopped", 2) end
+    if not self.lastPlayback then return 0 end
+    if self.isPaused then return self.position end
+    return (self.lastPlayback.pos + ((os_epoch "utc" - self.lastPlayback.time) * 48) - 1) / 48000
+end
+
+--- Seeks the current audio playback position. If the requested position isn't
+--- loaded yet, the player will hang until the audio is loaded. (If the position
+--- is out of bounds, the player will not continue.)
+---@param pos number The position to seek to, in seconds
+function Player:seek(pos)
+    expect.range(pos, 0)
+    if not self.playerTask then error("Player is stopped", 2) end
+    self.position = pos
+    self.invalidate = true
+    for _, v in ipairs(self.speakers) do v.stop() end
+end
+
+--- Stops the audio playback. This kills all tasks and invalidates the player.
+function Player:stop()
+    if not self.playerTask then error("Player is stopped", 2) end
+    self.playerTask:remove()
+    if self.loaderTask then self.loaderTask:remove() end
+    self.playerTask = nil
+    self.loaderTask = nil
+end
+
+--- Creates a player object that runs asynchronously. This requires the
+--- [Taskmaster](https://gist.github.com/MCJack123/1678fb2c240052f1480b07e9053d4537)
+--- library to function.
+---@param loop Taskmaster The Taskmaster loop to start the player on
+---@param callback fun():number[][]|nil The iterator function that returns each chunk
+---@param volume? number The volume to play the audio at; if omitted then
+--- this argument is the second speaker (if provided)
+---@param ... speaker The speakers to play on
+---@return aukit.Player player The player object to control playback with
+function aukit.player(loop, callback, volume, ...)
+    expect(1, loop, "table")
+    expect(2, callback, "function")
+    expect(3, volume, "number", "table")
+    local speakers = {...}
+    if type(volume) == "table" then
+        table_insert(speakers, 1, volume)
+        volume = nil
+    end
+    if #speakers == 0 then error("bad argument #3 (expected speakers, got nil)", 2) end
+    local player = setmetatable({
+        isPaused = false,
+        position = 0,
+        volume = volume,
+        speakers = speakers
+    }, Player_mt)
+    local decoded = {}
+    local id = tostring(player)
+    player.loaderTask = loop:addTask(function()
+        local n = 0
+        for chunk, pos in callback do
+            for j = 1, #chunk do
+                local c, d = chunk[j], decoded[j]
+                if not d then d = {} decoded[j] = d end
+                for i = 1, #c do
+                    d[n+i] = c[i]
+                end
+            end
+            n = n + #chunk[1]
+            os_queueEvent("aukit.loader_next", id)
+            repeat local _, param = os_pullEvent("aukit.loader_next")
+            until param == id
+        end
+        player.loaderTask = nil
+    end)
+    player.playerTask = loop:addTask(function()
+        while true do
+            local spos = math_floor(player.position * 48000) + 1
+            if not player.isPaused and decoded[1] and decoded[1][spos] then
+                local chunk = {}
+                for j = 1, #decoded do
+                    chunk[j] = {table_unpack(decoded[j], spos, math_min(spos + 47999, #decoded[j]))}
+                end
+                player.position = player.position + #chunk[1] / 48000
+                local fn = {}
+                for i, v in ipairs(speakers) do fn[i] = function()
+                    local name = peripheral.getName(v)
+                    if _HOST:find("CraftOS-PC v2.6.4") and config and not config.get("standardsMode") then
+                        v.playAudio(chunk[i] or chunk[1], volume)
+                        repeat until select(2, os_pullEvent("speaker_audio_empty")) == name
+                    else while not v.playAudio(chunk[i] or chunk[1], volume) do
+                        repeat until select(2, os_pullEvent("speaker_audio_empty")) == name
+                        if player.invalidate then chunk = nil return end
+                    end end
+                    player.lastPlayback = {time = os.epoch "utc", pos = spos}
+                end end
+                parallel.waitForAll(table_unpack(fn))
+                player.invalidate = false
+            elseif not player.isPaused and player.loaderTask == nil and spos == #decoded[1] + 1 then
+                player.playerTask = nil
+                return
+            else
+                os_pullEvent()
+            end
+        end
+    end)
+    return player
+end
+
 local datafmts = {
     {"bbbbbbbb", 8, "signed"},
     {"BBBBBBBB", 8, "unsigned"},
@@ -1864,9 +1997,9 @@ local datafmts = {
 --- headers. It is not recommended to rely on the data type/bit depth reported
 --- for PCM files - they are merely a suggestion.
 ---@param data string The audio file to check
----@return "pcm"|"dfpwm"|"mdfpwm"|"wav"|"aiff"|"au"|"flac"|nil _ The type of audio file detected, or `nil` if none could be found
----@return number|nil _ The bit depth for PCM data, if the type is "pcm" and the bit depth can be detected
----@return "signed"|"unsigned"|"float"|nil _ The data type for PCM data, if the type is "pcm" and the type can be detected
+---@return string|nil type The type of audio file detected, or `nil` if none could be found ("pcm"|"dfpwm"|"mdfpwm"|"wav"|"aiff"|"au"|"flac")
+---@return number|nil bitDepth The bit depth for PCM data, if the type is "pcm" and the bit depth can be detected
+---@return string|nil dataType The data type for PCM data, if the type is "pcm" and the type can be detected ("signed"|"unsigned"|"float")
 function aukit.detect(data)
     expect(1, data, "string")
     if data:match "^RIFF....WAVE" then return "wav"
@@ -1920,7 +2053,7 @@ end
 --- aukit.stream
 ---@section aukit.stream
 
---- Returns an iterator to stream raw PCM audio in CC format. Audio will
+--- Returns an iterator to stream raw PCM audio in CC format. aukit.Audio will
 --- automatically be resampled to 48 kHz, and optionally mixed down to mono. Data
 --- *must* be interleaved - this will not work with planar audio.
 ---@param data string|table|function The audio data, either as a raw string, a
@@ -2136,7 +2269,7 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
     end, len / sampleRate
 end
 
---- Returns an iterator to stream audio from DFPWM data. Audio will automatically
+--- Returns an iterator to stream audio from DFPWM data. aukit.Audio will automatically
 --- be resampled to 48 kHz. Multiple channels are expected to be interleaved in
 --- the encoded DFPWM data.
 ---@param data string|fun():string The DFPWM data to decode, or a function
@@ -2225,6 +2358,7 @@ function aukit.stream.mdfpwm(data, mono)
     local headerSize = 0
     local length
     local buf = ""
+    local _
     if isstr then
         if data:sub(1, 7) ~= "MDFPWM\3" then error("bad argument #1 (invalid MDFPWM data)", 2) end
         length, _, _, _, pos = str_unpack("<Is1s1s1", data, 8)
@@ -2282,7 +2416,7 @@ function aukit.stream.mdfpwm(data, mono)
     end, length / 12000
 end
 
---- Returns an iterator to stream audio from Microsoft ADPCM data. Audio will
+--- Returns an iterator to stream audio from Microsoft ADPCM data. aukit.Audio will
 --- automatically be resampled to 48 kHz.
 ---@param input string|fun():string The audio data as a raw string or
 --- reader function
@@ -2446,7 +2580,7 @@ function aukit.stream.msadpcm(input, blockAlign, channels, sampleRate, mono, coe
     else error("Unsupported number of channels: " .. channels) end
 end
 
---- Returns an iterator to stream data from IMA ADPCM data. Audio will
+--- Returns an iterator to stream data from IMA ADPCM data. aukit.Audio will
 --- automatically be resampled to 48 kHz, and mixed to mono if desired. Data
 --- *must* be in the interleaving format used in WAV files (i.e. periodic blocks
 --- with 4/8-byte headers, channels alternating every 4 bytes, lower nibble first).
@@ -2545,7 +2679,7 @@ function aukit.stream.adpcm(input, blockAlign, channels, sampleRate, mono)
     end, not isfunc and #data / blockAlign * samplesPerBlock / sampleRate or nil
 end
 
---- Returns an iterator to stream data from u-law/A-law G.711 data. Audio will
+--- Returns an iterator to stream data from u-law/A-law G.711 data. aukit.Audio will
 --- automatically be resampled to 48 kHz, and mixed to mono if desired.
 ---@param input string|fun():string The audio data as a raw string or
 --- reader function
@@ -2623,7 +2757,7 @@ function aukit.stream.g711(input, ulaw, channels, sampleRate, mono)
     end, not isfunc and #input / sampleRate / channels or nil
 end
 
---- Returns an iterator to stream audio from a WAV file. Audio will automatically
+--- Returns an iterator to stream audio from a WAV file. aukit.Audio will automatically
 --- be resampled to 48 kHz, and optionally mixed down to mono. This accepts PCM
 --- files up to 32 bits, including float data, as well as DFPWM files [as specified here](https://gist.github.com/MCJack123/90c24b64c8e626c7f130b57e9800962c).
 ---@param data string|fun():string The WAV file to decode, or a function
@@ -2713,7 +2847,7 @@ function aukit.stream.wav(data, mono, ignoreHeader)
     error("invalid WAV file", 2)
 end
 
---- Returns an iterator to stream audio from an AIFF or AIFC file. Audio will
+--- Returns an iterator to stream audio from an AIFF or AIFC file. aukit.Audio will
 --- automatically be resampled to 48 kHz, and optionally mixed down to mono.
 ---@param data string|fun():string The AIFF file to decode, or a function
 --- returning chunks to decode (the first chunk MUST contain the ENTIRE header)
@@ -2783,7 +2917,7 @@ function aukit.stream.aiff(data, mono, ignoreHeader)
     error("invalid AIFF file", 2)
 end
 
---- Returns an iterator to stream data from an AU file. Audio will automatically
+--- Returns an iterator to stream data from an AU file. aukit.Audio will automatically
 --- be resampled to 48 kHz, and optionally mixed down to mono.
 ---@param data string|fun():string The AU file to decode, or a function
 --- returning chunks to decode (the first chunk MUST contain the ENTIRE header)
@@ -2823,7 +2957,7 @@ function aukit.stream.au(data, mono, ignoreHeader)
     else error("unsupported encoding type " .. encoding, 2) end
 end
 
---- Returns an iterator to stream data from a FLAC file. Audio will automatically
+--- Returns an iterator to stream data from a FLAC file. aukit.Audio will automatically
 --- be resampled to 48 kHz, and optionally mixed down to mono.
 ---@param data string|fun():string The FLAC file to decode, or a function
 --- returning chunks to decode
@@ -2915,9 +3049,9 @@ end
 ---@section aukit.effects
 
 --- Amplifies the audio by the multiplier specified.
----@param audio Audio The audio to modify
+---@param audio aukit.Audio The audio to modify
 ---@param multiplier number The multiplier to apply
----@return Audio _ The audio modified
+---@return aukit.Audio _ The audio modified
 function aukit.effects.amplify(audio, multiplier)
     expectAudio(1, audio)
     expect(2, multiplier, "number")
@@ -2935,9 +3069,9 @@ end
 
 --- Changes the speed and pitch of audio by a multiplier, resampling to keep the
 --- same sample rate.
----@param audio Audio The audio to modify
+---@param audio aukit.Audio The audio to modify
 ---@param multiplier number The multiplier to apply
----@return Audio _ The audio modified
+---@return aukit.Audio _ The audio modified
 function aukit.effects.speed(audio, multiplier)
     expectAudio(1, audio)
     expect(2, multiplier, "number")
@@ -2950,12 +3084,12 @@ function aukit.effects.speed(audio, multiplier)
 end
 
 --- Fades a period of music from one amplitude to another.
----@param audio Audio The audio to modify
+---@param audio aukit.Audio The audio to modify
 ---@param startTime number The start time of the fade, in seconds
 ---@param startAmplitude number The amplitude of the beginning of the fade
 ---@param endTime number The end time of the fade, in seconds
 ---@param endAmplitude number The amplitude of the end of the fade
----@return Audio _ The audio modified
+---@return aukit.Audio _ The audio modified
 function aukit.effects.fade(audio, startTime, startAmplitude, endTime, endAmplitude)
     expectAudio(1, audio)
     expect(2, startTime, "number")
@@ -2977,8 +3111,8 @@ function aukit.effects.fade(audio, startTime, startAmplitude, endTime, endAmplit
 end
 
 --- Inverts all channels in the specified audio.
----@param audio Audio The audio to modify
----@return Audio _ The audio modified
+---@param audio aukit.Audio The audio to modify
+---@return aukit.Audio _ The audio modified
 function aukit.effects.invert(audio)
     expectAudio(1, audio)
     for c = 1, #audio.data do
@@ -2989,10 +3123,10 @@ function aukit.effects.invert(audio)
 end
 
 --- Normalizes audio to the specified peak amplitude.
----@param audio Audio The audio to modify
+---@param audio aukit.Audio The audio to modify
 ---@param peakAmplitude? number The maximum amplitude
 ---@param independent? boolean Whether to normalize each channel independently
----@return Audio _ The audio modified
+---@return aukit.Audio _ The audio modified
 function aukit.effects.normalize(audio, peakAmplitude, independent)
     expectAudio(1, audio)
     peakAmplitude = expect(2, peakAmplitude, "number", "nil") or 1
@@ -3024,8 +3158,8 @@ function aukit.effects.normalize(audio, peakAmplitude, independent)
 end
 
 --- Centers the DC offset of each channel.
----@param audio Audio The audio to modify
----@return Audio _ The audio modified
+---@param audio aukit.Audio The audio to modify
+---@return aukit.Audio _ The audio modified
 function aukit.effects.center(audio)
     expectAudio(1, audio)
     for c = 1, #audio.data do
@@ -3042,9 +3176,9 @@ function aukit.effects.center(audio)
 end
 
 --- Trims any extra silence on either end of the specified audio.
----@param audio Audio The audio to modify
+---@param audio aukit.Audio The audio to modify
 ---@param threshold? number The maximum value to register as silence
----@return Audio _ The audio modified
+---@return aukit.Audio _ The audio modified
 function aukit.effects.trim(audio, threshold)
     expectAudio(1, audio)
     threshold = expect(2, threshold, "number", "nil") or (1/65536)
@@ -3063,10 +3197,10 @@ function aukit.effects.trim(audio, threshold)
 end
 
 --- Adds a delay to the specified audio.
----@param audio Audio The audio to modify
+---@param audio aukit.Audio The audio to modify
 ---@param delay number The amount of time to delay for, in seconds
 ---@param multiplier? number The multiplier to apply to the delayed audio
----@return Audio _ The audio modified
+---@return aukit.Audio _ The audio modified
 function aukit.effects.delay(audio, delay, multiplier)
     expectAudio(1, audio)
     expect(2, delay, "number")
@@ -3082,10 +3216,10 @@ function aukit.effects.delay(audio, delay, multiplier)
 end
 
 --- Adds an echo to the specified audio.
----@param audio Audio The audio to modify
+---@param audio aukit.Audio The audio to modify
 ---@param delay? number The amount of time to echo after, in seconds
 ---@param multiplier? number The decay multiplier to apply to the echoed audio
----@return Audio _ The audio modified
+---@return aukit.Audio _ The audio modified
 function aukit.effects.echo(audio, delay, multiplier)
     expectAudio(1, audio)
     delay = expect(2, delay, "number", "nil") or 1
@@ -3102,12 +3236,12 @@ local combDelayShift = {0, -11.73, 19.31, -7.97}
 local combDecayShift = {0, 0.1313, 0.2743, 0.31}
 
 --- Adds reverb to the specified audio.
----@param audio Audio The audio to modify
+---@param audio aukit.Audio The audio to modify
 ---@param delay? number The amount of time to reverb after, in **milliseconds**
 ---@param decay? number The decay factor to use
 ---@param wetMultiplier? number The wet (reverbed) mix amount
 ---@param dryMultiplier? number The dry (original) mix amount
----@return Audio _ The audio modified
+---@return aukit.Audio _ The audio modified
 function aukit.effects.reverb(audio, delay, decay, wetMultiplier, dryMultiplier)
     expectAudio(1, audio)
     delay = expect(2, delay, "number", "nil") or 100
@@ -3145,9 +3279,9 @@ function aukit.effects.reverb(audio, delay, decay, wetMultiplier, dryMultiplier)
 end
 
 --- Applies a low-pass filter to the specified audio.
----@param audio Audio The audio to modify
+---@param audio aukit.Audio The audio to modify
 ---@param frequency number The cutoff frequency for the filter
----@return Audio _ The audio modified
+---@return aukit.Audio _ The audio modified
 function aukit.effects.lowpass(audio, frequency)
     expectAudio(1, audio)
     expect(2, frequency, "number")
@@ -3163,9 +3297,9 @@ function aukit.effects.lowpass(audio, frequency)
 end
 
 --- Applies a high-pass filter to the specified audio.
----@param audio Audio The audio to modify
+---@param audio aukit.Audio The audio to modify
 ---@param frequency number The cutoff frequency for the filter
----@return Audio _ The audio modified
+---@return aukit.Audio _ The audio modified
 function aukit.effects.highpass(audio, frequency)
     expectAudio(1, audio)
     expect(2, frequency, "number")
