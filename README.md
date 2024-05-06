@@ -43,6 +43,8 @@ Both programs require the argument to end with the correct file extension - this
 
 To avoid overflowing the CC event queue, it is recommended that a delay is added to senders.
 
+`austream_tm` is an alternate version of `austream` that takes advantage of the [Taskmaster](https://gist.github.com/MCJack123/1678fb2c240052f1480b07e9053d4537) library to provide pausing and seeking while playing. Taskmaster must be downloaded next to `austream_tm` for it to function. Press space to pause/play, left/right arrow to seek back/forward 5 seconds, and Q to quit.
+
 #### Parameter list
 `austream` also accepts parameters for the file in a second argument using a table-like format (quotes are optional for strings): `austream file.bin type=pcm,sampleRate=44100,bitDepth=16,dataType=signed,channels=2,bigEndian=false`
 
