@@ -95,7 +95,7 @@ local table_pack, table_unpack, table_insert, table_remove = table.pack, table.u
 ---@field _VERSION string The version of AUKit that is loaded. This follows [SemVer](https://semver.org) format.
 ---@field defaultInterpolation "none"|"linear"|"cubic"|"sinc" Default interpolation mode for `Audio.resample` and other functions that need to resample.
 local aukit = setmetatable({
-    _VERSION = "1.9.0",
+    _VERSION = "1.9.1",
     defaultInterpolation = "linear"
 }, {__call = function(aukit, path)
     expect(1, path, "string")
