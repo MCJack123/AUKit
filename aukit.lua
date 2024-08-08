@@ -2375,8 +2375,8 @@ function aukit.stream.mdfpwm(data, mono)
         local dL, dR
         if isstr then
             if pos > #data then return nil end
-            dL = str_sub(data, pos, pos + 12000)
-            dR = str_sub(data, pos + 6001, pos + 12000)
+            dL = str_sub(data, pos, pos + 5999)
+            dR = str_sub(data, pos + 6000, pos + 11999)
         else
             while #buf < 12000 do
                 local chunk = data()
@@ -2390,9 +2390,9 @@ function aukit.stream.mdfpwm(data, mono)
             dR = str_sub(buf, 6001, 12000)
             buf = str_sub(buf, 12001)
         end
-        local audioL = decoderL(str_sub(dL, 1, 6000))
+        local audioL = decoderL(dL)
         if audioL == nil or #audioL == 0 then return nil end
-        local audioR = decoderR(str_sub(dR, 1, 6000))
+        local audioR = decoderR(dR)
         if audioR == nil or #audioR == 0 then return nil end
         os_queueEvent("nosleep")
         repeat until "nosleep" == os_pullEvent()
@@ -2411,7 +2411,7 @@ function aukit.stream.mdfpwm(data, mono)
         os_queueEvent("nosleep")
         repeat until "nosleep" == os_pullEvent()
         local p = pos - headerSize
-        pos = pos + #audioL + #audioR
+        pos = pos + #dL + #dR
         return lines, p / 12000
     end, length / 12000
 end
