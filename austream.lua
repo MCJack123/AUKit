@@ -83,6 +83,7 @@ end
 local iter, length
 if type(v.type) == "string" then v.type = v.type:lower() end
 if v.type == "dfpwm" or path:lower():match("%.dfpwm$") then iter, length = aukit.stream.dfpwm(data, v.sampleRate, v.channels, mono)
+elseif v.type == "mdfpwm" or path:lower():match("%.mdfpwm$") then iter, length = aukit.stream.mdfpwm(data, mono)
 elseif v.type == "wav" or path:lower():match("%.wav$") then iter, length = aukit.stream.wav(data, mono, v.ignoreHeader)
 elseif v.type == "aiff" or path:lower():match("%.aiff?$") then iter, length = aukit.stream.aiff(data, mono, v.ignoreHeader)
 elseif v.type == "au" or path:lower():match("%.au$") then iter, length = aukit.stream.au(data, mono, v.ignoreHeader)
