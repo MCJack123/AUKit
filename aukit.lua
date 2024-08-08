@@ -2403,9 +2403,10 @@ function aukit.stream.mdfpwm(data, mono)
         end
         local lines
         if mono then
-            lines = {{}}
-            for i = 1, 6000 do
-                lines[1][i] = clamp(math_floor(audioL[i] + audioR[i] / 2), -128, 127)
+            local l = {}
+            lines = {l}
+            for i = 1, 48000 do
+                l[i] = clamp(math_floor(audioL[i] + audioR[i] / 2), -128, 127)
             end
         else lines = {audioL, audioR} end
         os_queueEvent("nosleep")
