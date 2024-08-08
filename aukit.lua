@@ -944,12 +944,33 @@ function Audio:wav(bitDepth)
     bitDepth = expect(1, bitDepth, "number", "nil") or 16
     if bitDepth == 1 then
         local str = self:dfpwm(true)
-        return str_pack("<c4Ic4c4IHHIIHHHHIc16c4IIc4I",
-            "RIFF", #str + 72, "WAVE",
-            "fmt ", 40, 0xFFFE, #self.data, self.sampleRate, self.sampleRate * #self.data / 8, math_ceil(#self.data / 8), 1,
-                22, 1, wavExtensibleChannels[#self.data] or 0, wavExtensible.dfpwm,
-            "fact", 4, #self.data[1],
-            "data", #str) .. str
+        if self.metadata and next(self.metadata) then
+            local info = {}
+            for k, v in pairs(self.metadata) do
+                for l, w in pairs(wavMetadata) do
+                    if w == k then
+                        info[#info+1] = l
+                        info[#info+1] = tostring(v)
+                        break
+                    end
+                end
+            end
+            local list = str_pack("!2<c4" .. ("c4s4Xh"):rep(#info / 2), "INFO", table.unpack(info))
+            return str_pack("<c4Ic4c4IHHIIHHHHIc16c4IIc4s4c4I",
+                "RIFF", #str + 72, "WAVE",
+                "fmt ", 40, 0xFFFE, #self.data, self.sampleRate, self.sampleRate * #self.data / 8, math_ceil(#self.data / 8), 1,
+                    22, 1, wavExtensibleChannels[#self.data] or 0, wavExtensible.dfpwm,
+                "fact", 4, #self.data[1],
+                "LIST", list,
+                "data", #str) .. str
+        else
+            return str_pack("<c4Ic4c4IHHIIHHHHIc16c4IIc4I",
+                "RIFF", #str + 72, "WAVE",
+                "fmt ", 40, 0xFFFE, #self.data, self.sampleRate, self.sampleRate * #self.data / 8, math_ceil(#self.data / 8), 1,
+                    22, 1, wavExtensibleChannels[#self.data] or 0, wavExtensible.dfpwm,
+                "fact", 4, #self.data[1],
+                "data", #str) .. str
+        end
     elseif bitDepth ~= 8 and bitDepth ~= 16 and bitDepth ~= 24 and bitDepth ~= 32 then error("bad argument #2 (invalid bit depth)", 2) end
     local data = self:pcm(bitDepth, bitDepth == 8 and "unsigned" or "signed", true)
     local str = ""
@@ -957,7 +978,22 @@ function Audio:wav(bitDepth)
     local format = ((bitDepth == 8 and "I" or "i") .. (bitDepth / 8)):rep(csize)
     for i = 1, #data - csize, csize do str = str .. format:pack(table_unpack(data, i, i + csize - 1)) end
     str = str .. ((bitDepth == 8 and "I" or "i") .. (bitDepth / 8)):rep(#data % csize):pack(table_unpack(data, math_floor(#data / csize) * csize))
-    return str_pack("<c4Ic4c4IHHIIHHc4I", "RIFF", #str + 36, "WAVE", "fmt ", 16, 1, #self.data, self.sampleRate, self.sampleRate * #self.data * bitDepth / 8, #self.data * bitDepth / 8, bitDepth, "data", #str) .. str
+    if self.metadata and next(self.metadata) then
+        local info = {}
+        for k, v in pairs(self.metadata) do
+            for l, w in pairs(wavMetadata) do
+                if w == k then
+                    info[#info+1] = l
+                    info[#info+1] = tostring(v)
+                    break
+                end
+            end
+        end
+        local list = str_pack("!2<c4" .. ("c4s4Xh"):rep(#info / 2), "INFO", table.unpack(info))
+        return str_pack("<c4Ic4c4IHHIIHHc4s4c4I", "RIFF", #str + 36, "WAVE", "fmt ", 16, 1, #self.data, self.sampleRate, self.sampleRate * #self.data * bitDepth / 8, #self.data * bitDepth / 8, bitDepth, "LIST", list, "data", #str) .. str
+    else
+        return str_pack("<c4Ic4c4IHHIIHHc4I", "RIFF", #str + 36, "WAVE", "fmt ", 16, 1, #self.data, self.sampleRate, self.sampleRate * #self.data * bitDepth / 8, #self.data * bitDepth / 8, bitDepth, "data", #str) .. str
+    end
 end
 
 --- Converts the audio data to DFPWM. All channels share the same encoder, and
@@ -1396,16 +1432,16 @@ function aukit.mdfpwm(data, head)
     local start = os_epoch "utc"
     while pos <= #data do
         if os_epoch "utc" - start > 3000 then start = os_epoch "utc" sleep(0) end
-        local tempL = decoderL(str_sub(data, pos, pos + 6000))
+        local tempL = decoderL(str_sub(data, pos, pos + 5999))
         if tempL == nil or #tempL == 0 then break end
         for i = 1, #tempL do audio[last+i*2-1] = tempL[i] end
-        local tempR = decoderR(str_sub(data, pos + 6001, pos + 12000))
+        local tempR = decoderR(str_sub(data, pos + 6000, pos + 11999            ))
         if tempR == nil or #tempR == 0 then break end
         for i = 1, #tempR do audio[last+i*2] = tempR[i] end
         last = last + #tempL + #tempR
         pos = pos + 12000
     end
-    for i = length + 1, #audio do audio[i] = nil end
+    for i = length * 8 + 1, #audio do audio[i] = nil end
     local obj = aukit.pcm(audio, 8, "signed", 2, 48000, true, false)
     obj.metadata = {artist = artist, title = title, album = album}
     return obj
