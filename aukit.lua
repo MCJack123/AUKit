@@ -84,7 +84,7 @@
 local expect = require "cc.expect"
 local dfpwm = require "cc.audio.dfpwm"
 
-local bit32_band, bit32_bxor, bit32_lshift, bit32_rshift, bit32_btest, bit32_extract = bit32.band, bit32.bxor, bit32.lshift, bit32.rshift, bit32.btest, bit32.extract
+local bit32_band, bit32_bxor, bit32_lshift, bit32_rshift, bit32_arshift, bit32_btest, bit32_extract = bit32.band, bit32.bxor, bit32.lshift, bit32.rshift, bit32.arshift, bit32.btest, bit32.extract
 local math_floor, math_ceil, math_sin, math_abs, math_fmod, math_min, math_max, math_pi = math.floor, math.ceil, math.sin, math.abs, math.fmod, math.min, math.max, math.pi
 local os_epoch, os_queueEvent, os_pullEvent = os.epoch, os.queueEvent, os.pullEvent
 local str_pack, str_unpack, str_sub, str_byte, str_rep = string.pack, string.unpack, string.sub, string.byte, string.rep
@@ -95,7 +95,7 @@ local table_pack, table_unpack, table_insert, table_remove = table.pack, table.u
 ---@field _VERSION string The version of AUKit that is loaded. This follows [SemVer](https://semver.org) format.
 ---@field defaultInterpolation "none"|"linear"|"cubic"|"sinc" Default interpolation mode for `Audio.resample` and other functions that need to resample.
 local aukit = setmetatable({
-    _VERSION = "1.9.1",
+    _VERSION = "1.10.0",
     defaultInterpolation = "linear"
 }, {__call = function(aukit, path)
     expect(1, path, "string")
@@ -1659,6 +1659,123 @@ function aukit.flac(data, head)
     return setmetatable(decodeFLAC(data, nil, head), Audio_mt)
 end
 
+local qoa_dequant_tab = {
+	[0] = {[0] =    1,    -1,    3,    -3,    5,    -5,     7,     -7},
+	{[0] =    5,    -5,   18,   -18,   32,   -32,    49,    -49},
+	{[0] =   16,   -16,   53,   -53,   95,   -95,   147,   -147},
+	{[0] =   34,   -34,  113,  -113,  203,  -203,   315,   -315},
+	{[0] =   63,   -63,  210,  -210,  378,  -378,   588,   -588},
+	{[0] =  104,  -104,  345,  -345,  621,  -621,   966,   -966},
+	{[0] =  158,  -158,  528,  -528,  950,  -950,  1477,  -1477},
+	{[0] =  228,  -228,  760,  -760, 1368, -1368,  2128,  -2128},
+	{[0] =  316,  -316, 1053, -1053, 1895, -1895,  2947,  -2947},
+	{[0] =  422,  -422, 1405, -1405, 2529, -2529,  3934,  -3934},
+	{[0] =  548,  -548, 1828, -1828, 3290, -3290,  5117,  -5117},
+	{[0] =  696,  -696, 2320, -2320, 4176, -4176,  6496,  -6496},
+	{[0] =  868,  -868, 2893, -2893, 5207, -5207,  8099,  -8099},
+	{[0] = 1064, -1064, 3548, -3548, 6386, -6386,  9933,  -9933},
+	{[0] = 1286, -1286, 4288, -4288, 7718, -7718, 12005, -12005},
+	{[0] = 1536, -1536, 5120, -5120, 9216, -9216, 14336, -14336},
+}
+
+local function signed_rshift(a, b)
+    local n = bit32_arshift(a, b)
+    if n >= 0x80000000 then return n - 0x100000000 else return n end
+end
+
+local function qoa_lms_predict(lms)
+    local w, h = lms.weights, lms.history
+	return signed_rshift(w[1] * h[1] + w[2] * h[2] + w[3] * h[3] + w[4] * h[4], 13)
+end
+
+local function qoa_lms_update(lms, sample, residual)
+	local delta = signed_rshift(residual, 4)
+    local w, h = lms.weights, lms.history
+    lms.weights = {
+        w[1] + (h[1] < 0 and -delta or delta),
+        w[2] + (h[2] < 0 and -delta or delta),
+        w[3] + (h[3] < 0 and -delta or delta),
+        w[4] + (h[4] < 0 and -delta or delta)
+    }
+    lms.history = {h[2], h[3], h[4], sample}
+end
+
+--- Creates a new audio object from a QOA file.
+---@param data string The QOA data to load
+---@return aukit.Audio _ A new audio object with the contents of the QOA file
+function aukit.qoa(data)
+    expect(1, data, "string")
+    local magic, file_samples, pos = (">c4I4"):unpack(data)
+    if magic ~= "qoaf" then error("Not a QOA file", 2) end
+    local file_channels, file_sampleRate = (">BI3"):unpack(data, pos)
+    local retval = setmetatable({sampleRate = file_sampleRate, data = {}, metadata = {}, info = {bitDepth = 16, dataType = "signed"}}, Audio_mt) ---@type aukit.Audio
+    local lms = {}
+    for i = 1, file_channels do
+        retval.data[i] = {}
+        lms[i] = {history = {}, weights = {}}
+    end
+
+    local start = os_epoch "utc"
+    local sample_pos = 0
+    while pos + 16 * file_channels + 8 <= #data and sample_pos < file_samples do
+        -- from https://github.com/phoboslab/qoa/blob/master/qoa.h
+        -- MIT license - Copyright (c) 2023 Dominic Szablewski
+
+        -- Read and verify the frame header
+        local channels, samplerate, samples, frame_size
+        channels, samplerate, samples, frame_size, pos = (">BI3I2I2"):unpack(data, pos)
+
+        local data_size = frame_size - 8 - 4 * 4 * channels
+        local num_slices = math_floor(data_size / 8)
+        local max_total_samples = num_slices * 20
+
+        if
+            channels ~= file_channels or
+            samplerate ~= file_sampleRate or
+            frame_size > #data - pos + 1 or
+            samples * channels > max_total_samples
+        then
+            --error("Bad frame data", 2)
+            break
+        end
+
+        -- Read the LMS state: 4 x 2 bytes history, 4 x 2 bytes weights per channel
+        for c = 1, channels do
+            lms[c].history = {(">i2i2i2i2"):unpack(data, pos)}
+            pos = table.remove(lms[c].history)
+            lms[c].weights = {(">i2i2i2i2"):unpack(data, pos)}
+            pos = table.remove(lms[c].weights)
+        end
+
+        -- Decode all slices for all channels in this frame
+        for sample_index = 1, samples, 20 do
+            for c = 1, channels do
+                local sliceH, sliceL
+                sliceH, sliceL, pos = (">I4I4"):unpack(data, pos)
+
+                local scalefactor = bit32_extract(sliceH, 28, 4)
+
+                for si = sample_index, sample_index + 19 do
+                    local predicted = qoa_lms_predict(lms[c])
+                    local quantized = bit32_extract(sliceH, 25, 3)
+                    local dequantized = qoa_dequant_tab[scalefactor][quantized]
+                    --print(predicted, dequantized)
+                    local reconstructed = math_min(math_max(predicted + dequantized, -32768), 32767)
+
+                    retval.data[c][sample_pos + si] = reconstructed / (reconstructed < 0 and 32768 or 32767)
+                    sliceH = bit32_lshift(sliceH, 3) + bit32_extract(sliceL, 29, 3)
+                    sliceL = bit32_lshift(sliceL, 3)
+
+                    qoa_lms_update(lms[c], reconstructed, dequantized)
+                end
+            end
+        end
+        sample_pos = sample_pos + samples
+        if os_epoch "utc" - start > 3000 then start = os_epoch "utc" sleep(0) end
+    end
+    return retval
+end
+
 --- Creates a new empty audio object with the specified duration.
 ---@param duration number The length of the audio in seconds
 ---@param channels? number The number of channels present in the audio
@@ -2043,6 +2160,7 @@ function aukit.detect(data)
     elseif data:match "^%.snd" then return "au"
     elseif data:match "^fLaC" then return "flac"
     elseif data:match "^MDFPWM\3" then return "mdfpwm"
+    elseif data:match "^qoaf" then return "qoa"
     else
         -- Detect data type otherwise
         -- This expects the start or end of the audio to be (near) silence
@@ -3070,6 +3188,152 @@ function aukit.stream.flac(data, mono)
         pos = pos + #chunk[1] / 48000
         return chunk, pos
     end, len / sampleRate
+end
+
+--- Returns an iterator to stream data from a QOA file. aukit.Audio will automatically
+--- be resampled to 48 kHz, and optionally mixed down to mono.
+---@param data string|fun():string The QOA file to decode, or a function
+--- returning chunks to decode
+---@param mono? boolean Whether to mix the audio to mono
+---@return fun():number[][]|nil,number|nil _ An iterator function that returns
+--- chunks of each channel's data as arrays of signed 8-bit 48kHz PCM, as well as
+--- the current position of the audio in seconds
+---@return number _ The total length of the audio in seconds
+function aukit.stream.qoa(data, mono)
+    expect(1, data, "string", "function")
+    expect(2, mono, "boolean", "nil")
+    local read, peek
+    if type(data) == "string" then
+        local pos = 1
+        function read(n)
+            if pos > #data then return nil end
+            local d = data:sub(pos, pos + n - 1)
+            pos = pos + n
+            return d
+        end
+        function peek(n)
+            if pos > #data then return nil end
+            return data:sub(pos, pos + n - 1)
+        end
+    else
+        local buf = ""
+        function read(n)
+            while #buf < n do
+                local d = data()
+                if not d then return nil end
+                buf = buf .. d
+            end
+            local d = buf:sub(1, n)
+            buf = buf:sub(n + 1)
+            return d
+        end
+        function peek(n)
+            while #buf < n do
+                local d = data()
+                if not d then return nil end
+                buf = buf .. d
+            end
+            return buf:sub(1, n)
+        end
+    end
+    local magic, file_samples = (">c4I4"):unpack(assert(read(8), "Not a QOA file"), nil)
+    if magic ~= "qoaf" then error("Not a QOA file", 2) end
+    local file_channels, file_sampleRate = (">BI3"):unpack(assert(peek(4), "Not a QOA file"), nil)
+    local lms = {}
+    local last = {}
+    for i = 1, file_channels do
+        lms[i] = {history = {}, weights = {}}
+        last[i] = {0, 0}
+    end
+
+    local file_pos = 0
+    local ratio = 48000 / file_sampleRate
+    local lp_alpha = 1 - math.exp(-(file_sampleRate / 96000) * 2 * math_pi)
+    local interp = interpolate[aukit.defaultInterpolation]
+    return function()
+        local chunk = {}
+        for i = 1, file_channels do chunk[i] = {[-1] = last[i][1], [0] = last[i][2]} end
+        local sample_pos = 0
+        while sample_pos < file_sampleRate do
+            -- from https://github.com/phoboslab/qoa/blob/master/qoa.h
+            -- MIT license - Copyright (c) 2023 Dominic Szablewski
+
+            -- Read and verify the frame header
+            local d = read(8)
+            if not d then break end
+            local channels, samplerate, samples, frame_size = (">BI3I2I2"):unpack(d)
+
+            local data_size = frame_size - 8 - 4 * 4 * channels
+            local num_slices = math_floor(data_size / 8)
+            local max_total_samples = num_slices * 20
+
+            if
+                channels ~= file_channels or
+                samplerate ~= file_sampleRate or
+                samples * channels > max_total_samples
+            then
+                --error("Bad frame data", 2)
+                break
+            end
+
+            -- Read the LMS state: 4 x 2 bytes history, 4 x 2 bytes weights per channel
+            for c = 1, channels do
+                lms[c].history = {(">i2i2i2i2"):unpack(assert(read(8), "Invalid QOA data"), nil)}
+                lms[c].weights = {(">i2i2i2i2"):unpack(assert(read(8), "Invalid QOA data"), nil)}
+            end
+
+            -- Decode all slices for all channels in this frame
+            for sample_index = 1, samples, 20 do
+                for c = 1, channels do
+                    local sliceH, sliceL = (">I4I4"):unpack(assert(read(8), "Invalid QOA data"), nil)
+
+                    local scalefactor = bit32_extract(sliceH, 28, 4)
+
+                    for si = sample_index, sample_index + 19 do
+                        local predicted = qoa_lms_predict(lms[c])
+                        local quantized = bit32_extract(sliceH, 25, 3)
+                        local dequantized = qoa_dequant_tab[scalefactor][quantized]
+                        --print(predicted, dequantized)
+                        local reconstructed = math_min(math_max(predicted + dequantized, -32768), 32767)
+
+                        chunk[c][sample_pos + si] = math_floor(reconstructed / 256)
+                        sliceH = bit32_lshift(sliceH, 3) + bit32_extract(sliceL, 29, 3)
+                        sliceL = bit32_lshift(sliceL, 3)
+
+                        qoa_lms_update(lms[c], reconstructed, dequantized)
+                    end
+                end
+            end
+            sample_pos = sample_pos + samples
+        end
+
+        if #chunk[1] == 0 then return nil end
+
+        local newlen = #chunk[1] * ratio
+        local lines = {{}}
+        if not mono then for j = 2, file_channels do lines[j] = {} end end
+        local ls = {}
+        for j = 1, file_channels do ls[j] = last[j][2] end
+        for i = 1, newlen do
+            local n = 0
+            for j = 1, file_channels do
+                local x = (i - 1) / ratio + 1
+                local s
+                if x % 1 == 0 then s = chunk[j][x]
+                else s = clamp(interp(chunk[j], x), -128, 127) end
+                s = ls[j] + lp_alpha * (s - ls[j])
+                ls[j] = s
+                if mono then n = n + s
+                else lines[j][i] = s end
+            end
+            if mono then lines[1][i] = n / file_channels end
+        end
+
+        local pos = file_pos / file_sampleRate
+        file_pos = file_pos + sample_pos
+        for i = 1, file_channels do last[i] = {chunk[i][#chunk[i]-1], chunk[i][#chunk[i]]} end
+        return lines, pos
+    end, file_samples / file_sampleRate
 end
 
 --[[

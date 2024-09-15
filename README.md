@@ -21,6 +21,7 @@ All sample rates and channel counts are supported. Functions to convert to Compu
 - AU, PCM, 8-bit, 16-bit, 24-bit, 32-bit, or float
 - AU, G.711, A-law or µ-law
 - FLAC, 8-bit, 16-bit, 24-bit, or 32-bit
+- [QOA](https://qoaformat.org/)
 
 ## Usage
 Download `aukit.lua` to your computer. You can also grab `austream` and `auplay` if you'd like. Then simply use `local aukit = require "aukit"` to load the library in a program.

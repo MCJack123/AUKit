@@ -13,6 +13,7 @@ elseif path:match("%.wav$") then audio = aukit.wav(data)
 elseif path:match("%.aiff?$") then audio = aukit.aiff(data)
 elseif path:match("%.au$") then audio = aukit.au(data)
 elseif path:match("%.flac$") then audio = aukit.flac(data)
+elseif path:match("%.qoa$") then audio = aukit.qoa(data)
 else error("Unknown file type!") end
 sleep(0)
 

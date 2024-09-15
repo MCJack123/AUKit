@@ -88,6 +88,7 @@ elseif v.type == "wav" or path:lower():match("%.wav$") then iter, length = aukit
 elseif v.type == "aiff" or path:lower():match("%.aiff?$") then iter, length = aukit.stream.aiff(data, mono, v.ignoreHeader)
 elseif v.type == "au" or path:lower():match("%.au$") then iter, length = aukit.stream.au(data, mono, v.ignoreHeader)
 elseif v.type == "flac" or path:lower():match("%.flac$") then iter, length = aukit.stream.flac(data, mono)
+elseif v.type == "qoa" or path:lower():match("%.qoa$") then iter, length = aukit.stream.qoa(data, mono)
 elseif v.type == "pcm" or path:lower():match("%.pcm$") or path:lower():match("%.raw$") or path:match("^rednet%+?%l*://") then iter, length = aukit.stream.pcm(data, v.bitDepth, v.dataType, v.channels, v.sampleRate, v.bigEndian, mono)
 else error("Unknown file type. Make sure to add the right file extension to the path/URL.") end
 if length == nil then length = 0 end
