@@ -95,7 +95,7 @@ local table_pack, table_unpack, table_insert, table_remove = table.pack, table.u
 ---@field _VERSION string The version of AUKit that is loaded. This follows [SemVer](https://semver.org) format.
 ---@field defaultInterpolation "none"|"linear"|"cubic"|"sinc" Default interpolation mode for `Audio.resample` and other functions that need to resample.
 local aukit = setmetatable({
-    _VERSION = "1.10.0",
+    _VERSION = "1.10.1",
     defaultInterpolation = "linear"
 }, {__call = function(aukit, path)
     expect(1, path, "string")
@@ -2448,6 +2448,7 @@ function aukit.stream.dfpwm(data, sampleRate, channels, mono)
     local last = 0
     local isstr = type(data) == "string"
     local buf = ""
+	local done = false
     return function()
         local d
         if isstr then
@@ -2455,8 +2456,10 @@ function aukit.stream.dfpwm(data, sampleRate, channels, mono)
             d = str_sub(data, pos, pos + 6000 * channels)
         else
             while #buf < sampleRate / 8 * channels do
+				if done then return nil end
                 local chunk = data()
                 if not chunk then
+					done = true
                     if #buf == 0 then return nil
                     else break end
                 end
@@ -2512,6 +2515,7 @@ function aukit.stream.mdfpwm(data, mono)
     local headerSize = 0
     local length
     local buf = ""
+	local done = false
     local _
     if isstr then
         if data:sub(1, 7) ~= "MDFPWM\3" then error("bad argument #1 (invalid MDFPWM data)", 2) end
@@ -2533,8 +2537,10 @@ function aukit.stream.mdfpwm(data, mono)
             dR = str_sub(data, pos + 6000, pos + 11999)
         else
             while #buf < 12000 do
+				if done then return nil end
                 local chunk = data()
                 if not chunk then
+					done = true
                     if #buf == 0 then return nil
                     else break end
                 end
