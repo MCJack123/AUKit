@@ -1,5 +1,5 @@
 var searchData=
 [
-  ['samplerate_0',['sampleRate',['../classaukit_1_1Audio.html#aa26491b6be18d4a115ef4e1060628949',1,'aukit::Audio']]],
-  ['stream_1',['stream',['../classaukit.html#af0904af286bfef75382d742671134a80',1,'aukit']]]
+  ['playertask_0',['playerTask',['../classaukit_1_1Player.html#a3eb970daf7363571769179feb8d3b65b',1,'aukit::Player']]],
+  ['position_1',['position',['../classaukit_1_1Player.html#a5b9228994d3a66a4e632f7b51dcc8aed',1,'aukit::Player']]]
 ];

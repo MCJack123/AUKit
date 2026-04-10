@@ -5,7 +5,7 @@ if #speakers == 0 then error("No speaker attached") end
 if #speakers == 2 and peripheral.getName(speakers[1]) == "right" and peripheral.getName(speakers[2]) == "left" then speakers = {speakers[2], speakers[1]} end
 
 local path = ...
-if not path then error("Usage: austream <file/URL> [arguments for PCM/DFPWM]") end
+if not path then error("Usage: austream <file/URL> [player options]") end
 local params = select(2, ...)
 local v = {}
 if params then
@@ -98,15 +98,21 @@ local w = term.getSize()
 local y = select(2, term.getCursorPos())
 local fg, bg = colors.toBlit(term.getTextColor()), colors.toBlit(term.getBackgroundColor())
 term.write(("00:00 %s %02d:%02d"):format(("\127"):rep(w - 12), math.floor(length / 60), length % 60))
-aukit.play(iter, function(pos)
-    pos = math.min(pos, 5999)
-    local p = pos / length
-    term.setCursorPos(1, y)
-    if p > 1 then
-        term.blit(("%02d:%02d %s --:--"):format(math.floor(pos / 60), pos % 60, (" "):rep(w - 12)), fg:rep(w), bg:rep(6) .. fg:rep(w - 12) .. bg:rep(6))
-    else
-        term.blit(("%02d:%02d %s%s %02d:%02d"):format(math.floor(pos / 60), pos % 60, (" "):rep(math.floor((w - 12) * p)), ("\127"):rep((w - 12) - math.floor((w - 12) * p)), math.floor(length / 60), length % 60),
-            fg:rep(w), bg:rep(6) .. fg:rep(math.floor((w - 12) * p)) .. bg:rep((w - 12) - math.floor((w - 12) * p) + 6))
-    end
-end, v.volume, table.unpack(speakers))
+aukit.play({
+    callback = iter,
+    progress = function(pos)
+        pos = math.min(pos, 5999)
+        local p = pos / length
+        term.setCursorPos(1, y)
+        if p > 1 then
+            term.blit(("%02d:%02d %s --:--"):format(math.floor(pos / 60), pos % 60, (" "):rep(w - 12)), fg:rep(w), bg:rep(6) .. fg:rep(w - 12) .. bg:rep(6))
+        else
+            term.blit(("%02d:%02d %s%s %02d:%02d"):format(math.floor(pos / 60), pos % 60, (" "):rep(math.floor((w - 12) * p)), ("\127"):rep((w - 12) - math.floor((w - 12) * p)), math.floor(length / 60), length % 60),
+                fg:rep(w), bg:rep(6) .. fg:rep(math.floor((w - 12) * p)) .. bg:rep((w - 12) - math.floor((w - 12) * p) + 6))
+        end
+    end,
+    volume = v.volume,
+    hdr = v.hdr,
+    table.unpack(speakers)
+})
 print()

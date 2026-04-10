@@ -1,4 +1,6 @@
 var searchData=
 [
-  ['metadata_0',['metadata',['../classaukit_1_1Audio.html#af581f5dca371ab2d200a54bbca252e74',1,'aukit::Audio']]]
+  ['lastplayback_0',['lastPlayback',['../classaukit_1_1Player.html#aa3d785086d65a6667e9e64145fccfcbe',1,'aukit::Player']]],
+  ['loadertask_1',['loaderTask',['../classaukit_1_1Player.html#a47759182f64419b368051295bea83587',1,'aukit::Player']]],
+  ['loop_2',['loop',['../classaukit_1_1PlayerOptions.html#a545e7289f1a82873384086cbd9ea5b14',1,'aukit::PlayerOptions']]]
 ];

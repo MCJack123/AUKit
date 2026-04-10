@@ -85,7 +85,7 @@ local expect = require "cc.expect"
 local dfpwm = require "cc.audio.dfpwm"
 
 local bit32_band, bit32_bxor, bit32_lshift, bit32_rshift, bit32_arshift, bit32_btest, bit32_extract = bit32.band, bit32.bxor, bit32.lshift, bit32.rshift, bit32.arshift, bit32.btest, bit32.extract
-local math_floor, math_ceil, math_sin, math_abs, math_fmod, math_min, math_max, math_pi = math.floor, math.ceil, math.sin, math.abs, math.fmod, math.min, math.max, math.pi
+local math_floor, math_ceil, math_sin, math_abs, math_fmod, math_min, math_max, math_pi, math_random = math.floor, math.ceil, math.sin, math.abs, math.fmod, math.min, math.max, math.pi, math.random
 local os_epoch, os_queueEvent, os_pullEvent = os.epoch, os.queueEvent, os.pullEvent
 local str_pack, str_unpack, str_sub, str_byte, str_rep = string.pack, string.unpack, string.sub, string.byte, string.rep
 local table_pack, table_unpack, table_insert, table_remove = table.pack, table.unpack, table.insert, table.remove
@@ -94,9 +94,11 @@ local table_pack, table_unpack, table_insert, table_remove = table.pack, table.u
 ---@class aukit
 ---@field _VERSION string The version of AUKit that is loaded. This follows [SemVer](https://semver.org) format.
 ---@field defaultInterpolation "none"|"linear"|"cubic"|"sinc" Default interpolation mode for `Audio.resample` and other functions that need to resample.
+---@field dither boolean Whether to use dithering when quantizing audio, which improves 8-bit quality slightly.
 local aukit = setmetatable({
-    _VERSION = "1.10.1",
-    defaultInterpolation = "linear"
+    _VERSION = "1.11.0",
+    defaultInterpolation = "linear",
+    dither = true
 }, {__call = function(aukit, path)
     expect(1, path, "string")
     local file = assert(fs.open(path, "rb"))
@@ -869,17 +871,38 @@ local function encodePCM(info, pos)
     local maxValue = 2^(info.bitDepth-1)
     local add = info.dataType == "unsigned" and maxValue or 0
     local source = info.audio.data
-    local encode
+    local encode, e
     if info.dataType == "float" then encode = function(d) return d end
-    else encode = function(d) return d * (d < 0 and maxValue or maxValue-1) + add end end
+    elseif aukit.dither then encode = function(d)
+        local n = d * (d < 0 and maxValue or maxValue-1) + add
+        local f = clamp(math_floor(n + (math_random(0, 1) + math_random(-1, 0)) + 0.8 * e), add - maxValue, add + maxValue - 1)
+        e = n - f
+        return f
+    end else encode = function(d)
+        return clamp(math_floor(d * (d < 0 and maxValue or maxValue-1) + add), add - maxValue, add + maxValue - 1)
+    end end
     local data = {}
     local nc = #source
     local len = #source[1]
     if pos > len then return nil end
     local start = os_epoch "utc"
-    if info.interleaved then for n = pos, pos + info.len - 1 do if os_epoch "utc" - start > 3000 then start = os_epoch "utc" sleep(0) end for c = 1, nc do data[(n-1)*nc+c] = encode(source[c][n]) end end
+    if info.interleaved then
+        local ev = {}
+        for c = 1, nc do ev[c] = 0 end
+        for n = pos, pos + info.len - 1 do
+            if os_epoch "utc" - start > 3000 then
+                start = os_epoch "utc"
+                sleep(0)
+            end
+            for c = 1, nc do
+                e = ev[c]
+                data[(n-1)*nc+c] = encode(source[c][n])
+                ev[c] = e
+            end
+        end
     elseif info.multiple then
         for c = 1, nc do
+            e = 0
             data[c] = {}
             for n = pos, pos + info.len - 1 do
                 if os_epoch "utc" - start > 3000 then start = os_epoch "utc" sleep(0) end
@@ -889,7 +912,18 @@ local function encodePCM(info, pos)
             end
         end
         return pos + info.len, table_unpack(data)
-    else for c = 1, nc do for n = pos, pos + info.len - 1 do if os_epoch "utc" - start > 3000 then start = os_epoch "utc" sleep(0) end data[(c-1)*len+n] = encode(source[c][n]) end end end
+    else
+        for c = 1, nc do
+            e = 0
+            for n = pos, pos + info.len - 1 do
+                if os_epoch "utc" - start > 3000 then
+                    start = os_epoch "utc"
+                    sleep(0)
+                end
+                data[(c-1)*len+n] = encode(source[c][n])
+            end
+        end
+    end
     return data
 end
 
@@ -1879,32 +1913,56 @@ end
 
 ---@alias speaker {playAudio: fun(samples: number[], volume?: number)}
 
+--- Options for `aukit.play`.
+---@class aukit.PlayOptions
+---@field callback fun():(number[][]|nil) The iterator function that returns each chunk
+---@field progress? fun(pos:number) A callback to report progress to
+---@field volume? number The volume to play the audio at; if omitted then this argument is the second speaker (if provided)
+---@field hdr? boolean Whether to enable HDR mode, which enhances audio quality of quiet parts through volume adjustment (incompatible with volume > 1)
+---@field ... speaker The speakers to play on
+
 --- Plays back stream functions created by one of the `aukit.stream` functions
 --- or `Audio.stream`.
----@param callback fun():number[][]|nil The iterator function that returns each chunk
----@param progress? fun(pos:number) A callback to report progress to
---- the caller; if omitted then this argument is the first speaker
----@param volume? number The volume to play the audio at; if omitted then
---- this argument is the second speaker (if provided)
+---@param callback (fun():(number[][]|nil))|aukit.PlayOptions The iterator function that returns each chunk
+---@param progress? fun(pos:number) A callback to report progress to the caller; if omitted then this argument is the first speaker
+---@param volume? number The volume to play the audio at; if omitted then this argument is the second speaker (if provided)
 ---@param ... speaker The speakers to play on
+---@overload fun(opts: aukit.PlayOptions)
 function aukit.play(callback, progress, volume, ...)
-    expect(1, callback, "function")
-    expect(2, progress, "function", "table")
-    expect(3, volume, "number", "table", "nil")
-    local speakers = {...}
-    if type(volume) == "table" then
-        table_insert(speakers, 1, volume)
-        volume = nil
+    local speakers, hdr
+    if type(callback) == "table" then
+        local opts = callback
+        callback = expect.field(opts, "callback", "function")
+        progress = expect.field(opts, "progress", "function", "nil")
+        volume = expect.field(opts, "volume", "number", "nil")
+        if expect.field(opts, "hdr", "boolean", "nil") then
+            if volume and volume > 1 then error("bad field 'volume' (HDR mode requires volume <= 1)", 2) end
+            hdr = true
+        end
+        speakers = opts
+        if #speakers == 0 then error("options table needs at least one speaker as an array entry", 2) end
+    else
+        expect(1, callback, "function")
+        expect(2, progress, "function", "table")
+        expect(3, volume, "number", "table", "nil")
+        speakers = {...}
+        if type(volume) == "table" then
+            table_insert(speakers, 1, volume)
+            volume = nil
+        end
+        if type(progress) == "table" then
+            table_insert(speakers, 1, progress)
+            progress = nil
+        end
+        if #speakers == 0 then error("bad argument #2 (expected speakers, got nil)", 2) end
     end
-    if type(progress) == "table" then
-        table_insert(speakers, 1, progress)
-        progress = nil
-    end
-    if #speakers == 0 then error("bad argument #2 (expected speakers, got nil)", 2) end
     local chunks = {}
     local complete = false
     local a, b = coroutine.create(function()
-        for chunk, pos in callback do chunks[#chunks+1] = {chunk, pos} coroutine.yield(speakers) end
+        for chunk, pos in callback do
+            chunks[#chunks+1] = {chunk, pos, volume}
+            coroutine.yield(speakers)
+        end
         complete = true
     end), coroutine.create(function()
         while not complete or #chunks > 0 do
@@ -1927,12 +1985,22 @@ function aukit.play(callback, progress, volume, ...)
                 end
             end
             for _, chunk in ipairs(chunklist) do
+                local vol = volume or 1
+                if hdr then
+                    local max = 0
+                    for _, r in ipairs(chunk) do for i = 1, #r do max = math_max(max, math_abs(r[i])) end end
+                    if max > 0 and max < 127 then
+                        local ratio = 127 / max
+                        for _, r in ipairs(chunk) do for i = 1, #r do r[i] = math_floor(r[i] * ratio) end end
+                        vol = vol / ratio
+                    end
+                end
                 for i, v in ipairs(speakers) do fn[i] = function()
                     local name = peripheral.getName(v)
                     if _HOST:find("CraftOS-PC v2.6.4") and config and not config.get("standardsMode") then
-                        v.playAudio(chunk[i] or chunk[1], volume)
+                        v.playAudio(chunk[i] or chunk[1], vol)
                         repeat until select(2, os_pullEvent("speaker_audio_empty")) == name
-                    else while not v.playAudio(chunk[i] or chunk[1], volume) do
+                    else while not v.playAudio(chunk[i] or chunk[1], vol) do
                         repeat until select(2, os_pullEvent("speaker_audio_empty")) == name
                     end end
                 end end
@@ -1999,6 +2067,7 @@ end
 ---@field isPaused boolean Whether the player is paused.
 ---@field position number The current position of the audio, in seconds
 ---@field volume number The volume of the audio
+---@field hdr boolean Whether the player is using HDR mode
 ---@field loaderTask Task The task that is loading the audio
 ---@field playerTask Task The task that is playing the audio
 ---@field speakers speaker[] The speakers the audio is playing on
@@ -2046,6 +2115,15 @@ function Player:seek(pos)
     for _, v in ipairs(self.speakers) do v.stop() end
 end
 
+--- Sets the volume of playback. If HDR mode is enabled, this must be between 0
+--- and 1; otherwise, it may be between 0 and 3.
+---@param vol number The volume to set
+function Player:setVolume(vol)
+    expect(1, vol, "number")
+    expect.range(vol, 0, self.hdr and 1 or 3)
+    self.volume = vol
+end
+
 --- Stops the audio playback. This kills all tasks and invalidates the player.
 function Player:stop()
     if not self.playerTask then error("Player is stopped", 2) end
@@ -2055,28 +2133,51 @@ function Player:stop()
     self.loaderTask = nil
 end
 
+--- Options for `aukit.player`.
+---@class aukit.PlayerOptions
+---@field loop Taskmaster The Taskmaster loop to start the player on
+---@field callback fun():(number[][]|nil) The iterator function that returns each chunk
+---@field volume? number The volume to play the audio at; if omitted then this argument is the second speaker (if provided)
+---@field hdr? boolean Whether to enable HDR mode, which enhances audio quality of quiet parts through volume adjustment (incompatible with volume > 1)
+---@field ... speaker The speakers to play on
+
 --- Creates a player object that runs asynchronously. This requires the
 --- [Taskmaster](https://gist.github.com/MCJack123/1678fb2c240052f1480b07e9053d4537)
 --- library to function.
 ---@param loop Taskmaster The Taskmaster loop to start the player on
----@param callback fun():number[][]|nil The iterator function that returns each chunk
----@param volume? number The volume to play the audio at; if omitted then
---- this argument is the second speaker (if provided)
+---@param callback (fun():(number[][]|nil))|aukit.PlayerOptions The iterator function that returns each chunk
+---@param volume? number The volume to play the audio at; if omitted then this argument is the second speaker (if provided)
 ---@param ... speaker The speakers to play on
 ---@return aukit.Player player The player object to control playback with
+---@overload fun(opts: aukit.PlayerOptions): aukit.Player
 function aukit.player(loop, callback, volume, ...)
-    expect(1, loop, "table")
-    expect(2, callback, "function")
-    expect(3, volume, "number", "table")
-    local speakers = {...}
-    if type(volume) == "table" then
-        table_insert(speakers, 1, volume)
-        volume = nil
+    local speakers, hdr
+    if type(loop) == "table" and loop.loop and not callback then
+        local opts = loop
+        loop = expect.field(opts, "loop", "table")
+        callback = expect.field(opts, "callback", "function")
+        volume = expect.field(opts, "volume", "number", "nil")
+        if expect.field(opts, "hdr", "boolean", "nil") then
+            if volume and volume > 1 then error("bad field 'volume' (HDR mode requires volume <= 1)", 2) end
+            hdr = true
+        end
+        speakers = opts
+        if #speakers == 0 then error("options table needs at least one speaker as an array entry", 2) end
+    else
+        expect(1, loop, "table")
+        expect(2, callback, "function")
+        expect(3, volume, "number", "table")
+        speakers = {...}
+        if type(volume) == "table" then
+            table_insert(speakers, 1, volume)
+            volume = nil
+        end
+        if #speakers == 0 then error("bad argument #3 (expected speakers, got nil)", 2) end
     end
-    if #speakers == 0 then error("bad argument #3 (expected speakers, got nil)", 2) end
     local player = setmetatable({
         isPaused = false,
         position = 0,
+        hdr = hdr,
         volume = volume,
         speakers = speakers
     }, Player_mt)
@@ -2107,14 +2208,24 @@ function aukit.player(loop, callback, volume, ...)
                 for j = 1, #decoded do
                     chunk[j] = {table_unpack(decoded[j], spos, math_min(spos + 47999, #decoded[j]))}
                 end
+                local vol = player.volume or 1
+                if player.hdr then
+                    local max = 0
+                    for _, r in ipairs(chunk) do for i = 1, #r do max = math_max(max, math_abs(r[i])) end end
+                    if max > 0 then
+                        local ratio = 127 / max
+                        for _, r in ipairs(chunk) do for i = 1, #r do r[i] = math_floor(r[i] * ratio) end end
+                        vol = vol / ratio
+                    end
+                end
                 player.position = player.position + #chunk[1] / 48000
                 local fn = {}
                 for i, v in ipairs(speakers) do fn[i] = function()
                     local name = peripheral.getName(v)
                     if _HOST:find("CraftOS-PC v2.6.4") and config and not config.get("standardsMode") then
-                        v.playAudio(chunk[i] or chunk[1], volume)
+                        v.playAudio(chunk[i] or chunk[1], vol)
                         repeat until select(2, os_pullEvent("speaker_audio_empty")) == name
-                    else while not v.playAudio(chunk[i] or chunk[1], volume) do
+                    else while not v.playAudio(chunk[i] or chunk[1], vol) do
                         repeat until select(2, os_pullEvent("speaker_audio_empty")) == name
                         if player.invalidate then chunk = nil return end
                     end end
@@ -2249,6 +2360,7 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
     local sformat = dataType == "float" and "f" or ((dataType == "signed" and "i" or "I") .. byteDepth)
     local format = bitDir .. str_rep(sformat, csize)
     local maxValue = 2^(bitDepth-1)
+    local dither, defaultInterpolation = aukit.dither, aukit.defaultInterpolation
     local pos, spos = 1, 1
     local tmp = {}
     local read
@@ -2363,7 +2475,7 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
     local d = {}
     local ratio = 48000 / sampleRate
     local lp_alpha = 1 - math.exp(-(sampleRate / 96000) * 2 * math_pi)
-    local interp = interpolate[aukit.defaultInterpolation]
+    local interp = interpolate[defaultInterpolation]
     for j = 1, (mono and 1 or channels) do d[j] = setmetatable({}, {__index = function(self, i)
         if mono then for _ = 1, channels do self[i] = (rawget(self, i) or 0) + read() end self[i] = self[i] / channels
         else self[i] = read() end
@@ -2373,7 +2485,7 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
     local ok = true
     return function()
         if not ok or complete then return nil end
-        for i = (n == 0 and interpolation_start[aukit.defaultInterpolation] or 1), interpolation_end[aukit.defaultInterpolation] do
+        for i = (n == 0 and interpolation_start[defaultInterpolation] or 1), interpolation_end[defaultInterpolation] do
             if mono then
                 local s = 0
                 for j = 1, channels do
@@ -2392,22 +2504,40 @@ function aukit.stream.pcm(data, bitDepth, dataType, channels, sampleRate, bigEnd
                 local s = chunk[y][0] or 0
                 ls[y] = s / (s < 0 and 128 or 127)
             end
-            for i = 1, 48000 do
-                for y = 1, #d do
-                    local x = ((i - 1) / ratio) + 1
-                    local s
-                    if x % 1 == 0 then s = d[y][x]
-                    else s = interp(d[y], x) end
-                    local ns = ls[y] + lp_alpha * (s - ls[y])
-                    chunk[y][i] = clamp(ns * (ns < 0 and 128 or 127), -128, 127)
-                    ls[y] = s
+            if dither then
+                for i = 1, 48000 do
+                    local e = 0
+                    for y = 1, #d do
+                        local x = ((i - 1) / ratio) + 1
+                        local s
+                        if x % 1 == 0 then s = d[y][x]
+                        else s = interp(d[y], x) end
+                        local ns = ls[y] + lp_alpha * (s - ls[y])
+                        local ss = ns * (ns < 0 and 128 or 127)
+                        local fs = clamp(ss + (math_random(0, 1) + math_random(-1, 0)) + lp_alpha * e, -128, 127)
+                        chunk[y][i] = fs
+                        ls[y] = s
+                        e = ss - fs
+                    end
+                end
+            else
+                for i = 1, 48000 do
+                    for y = 1, #d do
+                        local x = ((i - 1) / ratio) + 1
+                        local s
+                        if x % 1 == 0 then s = d[y][x]
+                        else s = interp(d[y], x) end
+                        local ns = ls[y] + lp_alpha * (s - ls[y])
+                        chunk[y][i] = clamp(ns * (ns < 0 and 128 or 127), -128, 127)
+                        ls[y] = s
+                    end
                 end
             end
         end)
         if #chunk[1] == 0 then return nil end
         n = n + #chunk[1]
         for y = 1, #d do
-            if aukit.defaultInterpolation == "sinc" then
+            if defaultInterpolation == "sinc" then
                 local t, l = {}, #d[y]
                 for i = -sincWindowSize, 0 do
                     t[i] = d[y][l + i]

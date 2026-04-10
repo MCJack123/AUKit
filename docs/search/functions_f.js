@@ -1,4 +1,5 @@
 var searchData=
 [
-  ['wav_0',['wav',['../classaukit.html#a75a38d5bcfd57d577b0049a2e2b42f66',1,'aukit::wav()'],['../classaukit_1_1Audio.html#ad5b2399429f5228bfbcbe3b1e5c21b7d',1,'aukit::Audio::wav()'],['../classaukit_1_1stream.html#ac2860aea647b7bb1ec52c16fc790ecf3',1,'aukit::stream::wav()']]]
+  ['tone_0',['tone',['../classaukit.html#a0313865a04cfb47532588b735651d6ab',1,'aukit']]],
+  ['trim_1',['trim',['../classaukit_1_1effects.html#ab4eef64a27569ec3df40b3bb46e1e61f',1,'aukit::effects']]]
 ];

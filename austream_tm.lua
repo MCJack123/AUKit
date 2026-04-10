@@ -6,7 +6,7 @@ if #speakers == 0 then error("No speaker attached") end
 if #speakers == 2 and peripheral.getName(speakers[1]) == "right" and peripheral.getName(speakers[2]) == "left" then speakers = {speakers[2], speakers[1]} end
 
 local path = ...
-if not path then error("Usage: austream <file/URL> [arguments for PCM/DFPWM]") end
+if not path then error("Usage: austream <file/URL> [player options]") end
 local params = select(2, ...)
 local v = {}
 if params then
@@ -108,7 +108,7 @@ local function progress(pos)
         fg:rep(w), bg:rep(6) .. fg:rep(math.floor((w - 12) * p)) .. bg:rep((w - 12) - math.floor((w - 12) * p) + 6))
     end
 end
-local player = aukit.player(loop, iter, table.unpack(speakers))
+local player = aukit.player({loop = loop, callback = iter, hdr = v.hdr, table.unpack(speakers)})
 loop:addTask(function()
     while true do
         local event, param = os.pullEvent("key")

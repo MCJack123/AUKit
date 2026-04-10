@@ -47,7 +47,7 @@ To avoid overflowing the CC event queue, it is recommended that a delay is added
 `austream_tm` is an alternate version of `austream` that takes advantage of the [Taskmaster](https://gist.github.com/MCJack123/1678fb2c240052f1480b07e9053d4537) library to provide pausing and seeking while playing. Taskmaster must be downloaded next to `austream_tm` for it to function. Press space to pause/play, left/right arrow to seek back/forward 5 seconds, and Q to quit.
 
 #### Parameter list
-`austream` also accepts parameters for the file in a second argument using a table-like format (quotes are optional for strings): `austream file.bin type=pcm,sampleRate=44100,bitDepth=16,dataType=signed,channels=2,bigEndian=false`
+`austream` also accepts parameters for the file in a second argument using a comma-delimited format (quotes are optional for strings): `austream file.bin type=pcm,sampleRate=44100,bitDepth=16,dataType=signed,channels=2,bigEndian=false`
 
 The following options are supported in the parameter list:
 - `type` [all]: Type of file to load (`pcm`, `dfpwm`, `wav`, `aiff`, `au`, `flac`)
@@ -55,6 +55,7 @@ The following options are supported in the parameter list:
 - `volume` [all]: Playback volume from 0.0 to 3.0 (default 1.0)
 - `mono` [all]: Whether to mix audio down to mono (`true`, `false`) (default false)
 - `interpolation` [all]: Interpolation mode to use when resampling (`none`, `linear`, `cubic`)
+- `hdr` [all]: Whether to enable HDR mode for dynamic range compensation (`true`, `false`) (default false)
 - `sampleRate` [pcm, dfpwm]: Sample rate of the audio (default 48000 Hz)
 - `channels` [pcm, dfpwm]: Number of channels in the file (default 1)
 - `bitDepth` [pcm]: Bit depth of each sample (8, 16, 24, 32) (default 8)
